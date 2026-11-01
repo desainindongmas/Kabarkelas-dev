@@ -78,5 +78,25 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
    };
    box.append(studentsButton,studentsRegion);
  }
+ if((unit.role==='guardian'||unit.role==='principal') && unit.school_id){
+   const b=el('button',unit.role==='guardian'?'Lihat anak saya':'Lihat siswa sekolah','secondary');
+   const results=el('div',null,'student-results');
+   b.onclick=async()=>{
+     b.disabled=true;results.replaceChildren(el('p','Memuat data...','muted'));
+     try{
+       const {data,error}=await supabase.rpc('kabarkelas_my_role_students',{p_school_id:unit.school_id});
+       if(error) throw error;
+       results.replaceChildren(el('h2',unit.role==='guardian'?'Anak saya':'Siswa sekolah'));
+       if(!Array.isArray(data)||data.length===0)results.append(el('p','Tidak ada data siswa yang boleh ditampilkan.','muted'));
+       else for(const s of data){
+         const item=el('div',null,'student-row');
+         item.append(el('strong',s.display_name),el('p',s.local_student_no,'muted'));
+         results.append(item);
+       }
+     }catch{results.replaceChildren(el('p','Data siswa gagal dimuat.','error'))}
+     finally{b.disabled=false;}
+   };box.append(b,results);
+ }
+ if(unit.role==='foundation_admin') box.append(el('p','Akses yayasan ke data siswa individual tidak diberikan secara otomatis.','notice'));
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

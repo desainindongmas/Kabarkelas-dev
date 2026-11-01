@@ -98,5 +98,24 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
    };box.append(b,results);
  }
  if(unit.role==='foundation_admin') box.append(el('p','Akses yayasan ke data siswa individual tidak diberikan secara otomatis.','notice'));
+ if(['teacher','principal','guardian'].includes(unit.role) && unit.school_id){
+   const gradeButton=el('button',unit.role==='guardian'?'Lihat nilai yang sudah diterbitkan':'Lihat penilaian akademik','secondary');
+   const gradeResults=el('div',null,'grade-results');
+   gradeButton.onclick=async()=>{
+     gradeButton.disabled=true;gradeResults.replaceChildren(el('p','Memuat penilaian...','muted'));
+     try{
+       const {data,error}=await supabase.rpc('kabarkelas_my_grades',{p_school_id:unit.school_id});
+       if(error) throw error;
+       gradeResults.replaceChildren(el('h2','Penilaian akademik'));
+       if(!Array.isArray(data)||!data.length) gradeResults.append(el('p','Belum ada nilai yang dapat ditampilkan.','muted'));
+       else for(const grade of data){
+         const item=el('div',null,'student-row');
+         item.append(el('strong',grade.student_name+' · '+grade.subject_name),el('p',grade.assessment_title+' · Nilai '+grade.score+' · '+grade.grade_status,'muted'));
+         gradeResults.append(item);
+       }
+     }catch{gradeResults.replaceChildren(el('p','Data penilaian tidak dapat dimuat.','error'))}
+     finally{gradeButton.disabled=false;}
+   };box.append(gradeButton,gradeResults);
+ }
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

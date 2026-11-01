@@ -62,6 +62,56 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await testClient.end();
       }
     });
+    await t.test('G0.5.1 teacher finalization and class report approval lifecycle',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');
+        await client.query(fixtures);
+        const asUser=async n=>{
+          await client.query('RESET ROLE');
+          await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);
+          await client.query('SET LOCAL ROLE authenticated');
+        };
+        await asUser(1);
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'initial',65,'Nilai awal')",[id(801)]);
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'remedial',58,'Remedial')",[id(801)]);
+        const finalized=await client.query('SELECT public.kabarkelas_finalize_assessment($1) result',[id(801)]);
+        assert.equal(finalized.rows[0].result.effective_score,65);
+        assert.equal(finalized.rows[0].result.status,'released');
+        await asUser(2);
+        const created=await client.query('SELECT public.kabarkelas_create_class_report($1,$2,$3) id',[id(301),id(501),id(1)]);
+        const report=created.rows[0].id;
+        await asUser(1);
+        const first=await client.query("SELECT public.kabarkelas_transition_class_report($1,'teacher_finalize',1) result",[report]);
+        assert.equal(first.rows[0].result.status,'teacher_finalized');
+        const second=await client.query("SELECT public.kabarkelas_transition_class_report($1,'homeroom_review',2) result",[report]);
+        assert.equal(second.rows[0].result.status,'homeroom_reviewed');
+        await asUser(2);
+        const signed=await client.query("SELECT public.kabarkelas_transition_class_report($1,'principal_sign',3) result",[report]);
+        assert.equal(signed.rows[0].result.status,'principal_signed');
+        await asUser(1);
+        const released=await client.query("SELECT public.kabarkelas_transition_class_report($1,'release',4) result",[report]);
+        assert.equal(released.rows[0].result.status,'released');
+        await asUser(3);
+        const grades=await client.query('SELECT * FROM public.kabarkelas_my_released_reports($1)',[id(201)]);
+        assert.equal(grades.rows.length,1);
+        assert.equal(Number(grades.rows[0].grades[0].score),65);
+        const daily=await client.query('SELECT * FROM public.kabarkelas_parent_assessments($1)',[id(201)]);
+        assert.equal(daily.rows.length,1);
+        assert.equal(Number(daily.rows[0].score),65);
+        await client.query('RESET ROLE');
+        const audit=await client.query("SELECT count(*)::integer n FROM public.academic_workflow_events WHERE resource_type='report_card' AND resource_id=$1",[report]);
+        assert.equal(audit.rows[0].n,5);
+        const snaps=await client.query('SELECT count(*)::integer n FROM public.school_report_snapshots WHERE report_id=$1',[report]);
+        assert.equal(snaps.rows[0].n,1);
+        await asUser(9);
+        const hidden=await client.query('SELECT * FROM public.kabarkelas_my_released_reports($1)',[id(201)]);
+        assert.equal(hidden.rows.length,0);
+      }finally{
+        await client.query('ROLLBACK').catch(()=>{});
+        await client.end();
+      }
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

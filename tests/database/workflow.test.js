@@ -55,6 +55,12 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         const audit=await testClient.query('SELECT previous_score,corrected_score FROM public.assessment_corrections WHERE attempt_id=$1',[attempt]);
         assert.equal(Number(audit.rows[0].previous_score),65);
         assert.equal(Number(audit.rows[0].corrected_score),70);
+        await asUser(1);
+        const read=await testClient.query('SELECT allowed_actions FROM public.kabarkelas_grade_workflow($1) WHERE grade_id=$2',[id(201),grade]);
+        assert.deepEqual(read.rows[0].allowed_actions,[]);
+        await testClient.query('SAVEPOINT legacy');
+        await assert.rejects(testClient.query("SELECT public.kabarkelas_transition_grade($1,'submit',1)",[grade]),e=>e.code==='55000');
+        await testClient.query('ROLLBACK TO SAVEPOINT legacy');
         await asUser(2);
         await assert.rejects(testClient.query("SELECT public.kabarkelas_record_attempt($1,'remedial',90,'Tidak berhak')",[grade]),e=>e.code==='42501');
       } finally {

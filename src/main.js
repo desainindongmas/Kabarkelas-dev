@@ -179,6 +179,17 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
                try{await refresh();}catch{message(area,'Data tidak bisa dimuat ulang.',true);}
              };
              area.append(scoreInput,note,add);
+             if(first?.attempt_count>0){
+               const finalize=el('button','Finalisasi nilai harian','secondary');finalize.type='button';
+               finalize.onclick=async()=>{
+                 if(!window.confirm('Finalisasi versi nilai saat ini sesuai kebijakan sekolah?'))return;
+                 finalize.disabled=true;
+                 const {data,error}=await supabase.rpc('kabarkelas_finalize_assessment',{p_grade:grade.grade_id});
+                 if(error){message(area,'Finalisasi ditolak. Periksa data dan penugasan.',true);finalize.disabled=false;return;}
+                 message(area,'Versi '+data.version+' '+(data.status==='released'?'telah dirilis kepada orang tua.':'difinalisasi untuk rapor.')+' Nilai: '+data.effective_score);
+                 finalize.disabled=false;
+               };area.append(finalize);
+             }
            };
            manage.onclick=async()=>{manage.disabled=true;try{await refresh();}catch{message(area,'Fitur remedial belum dapat dimuat.',true);}finally{manage.disabled=false;}};
            item.append(manage,area);
@@ -188,6 +199,24 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
      }catch{gradeResults.replaceChildren(el('p','Data penilaian tidak dapat dimuat.','error'))}
      finally{gradeButton.disabled=false;}
    };box.append(gradeButton,gradeResults);
+ }
+ if(unit.role==='guardian' && unit.school_id){
+   const dailyButton=el('button','Lihat nilai harian yang sudah dirilis','secondary');
+   const dailyResults=el('div',null,'grade-results');
+   dailyButton.onclick=async()=>{
+     dailyButton.disabled=true;
+     const {data,error}=await supabase.rpc('kabarkelas_parent_assessments',{p_school:unit.school_id});
+     dailyResults.replaceChildren(el('h2','Nilai pembelajaran yang dirilis'));
+     if(error)dailyResults.append(el('p','Nilai harian tidak bisa dimuat.','error'));
+     else if(!data?.length)dailyResults.append(el('p','Belum ada nilai harian yang dirilis.','muted'));
+     else for(const item of data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',item.student_name+' · '+item.subject_name),el('p',item.assessment_title+' · Nilai '+item.score+' · Versi '+item.release_version,'muted'));
+       dailyResults.append(line);
+     }
+     dailyButton.disabled=false;
+   };
+   box.append(dailyButton,dailyResults);
  }
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

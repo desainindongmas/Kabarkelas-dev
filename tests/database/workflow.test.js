@@ -112,6 +112,38 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.end();
       }
     });
+    await t.test('G0.5.1 configurable latest remediation and report-only visibility',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');
+        await client.query(fixtures);
+        const asUser=async n=>{
+          await client.query('RESET ROLE');
+          await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);
+          await client.query('SET LOCAL ROLE authenticated');
+        };
+        await asUser(2);
+        const saved=await client.query("SELECT public.kabarkelas_set_school_assessment_policy($1,'latest_score',NULL,'report_only') version",[id(201)]);
+        assert.equal(saved.rows[0].version,1);
+        await asUser(1);
+        const policy=await client.query('SELECT * FROM public.kabarkelas_school_assessment_policy($1)',[id(201)]);
+        assert.equal(policy.rows[0].mode,'latest_score');
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'initial',65,'Nilai awal')",[id(801)]);
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'remedial',58,'Remedial')",[id(801)]);
+        const result=await client.query('SELECT public.kabarkelas_finalize_assessment($1) result',[id(801)]);
+        assert.equal(result.rows[0].result.effective_score,58);
+        assert.equal(result.rows[0].result.status,'finalized');
+        await asUser(3);
+        const hidden=await client.query('SELECT * FROM public.kabarkelas_parent_assessments($1)',[id(201)]);
+        assert.equal(hidden.rows.length,0);
+        await client.query('RESET ROLE');
+        const immutable=await client.query('SELECT count(*)::integer n FROM public.assessment_releases WHERE grade_id=$1 AND status=$2',[id(801),'finalized']);
+        assert.equal(immutable.rows[0].n,1);
+      }finally{
+        await client.query('ROLLBACK').catch(()=>{});
+        await client.end();
+      }
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

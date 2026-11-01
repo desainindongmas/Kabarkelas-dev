@@ -136,6 +136,53 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
            };
            item.append(actionButton);
          }
+         if(unit.role==='teacher' && grade.grade_status==='draft'){
+           const manage=el('button','Kelola nilai awal & remedial','secondary');
+           manage.type='button';
+           const area=el('div',null,'student-results');
+           const refresh=async()=>{
+             area.replaceChildren(el('p','Memuat percobaan nilai...','muted'));
+             const [{data:attempts,error:attemptError},{data:summary,error:summaryError}]=await Promise.all([
+               supabase.rpc('kabarkelas_list_attempts',{p_grade:grade.grade_id}),
+               supabase.rpc('kabarkelas_attempt_summary',{p_grade:grade.grade_id})
+             ]);
+             if(attemptError||summaryError) throw new Error('Gagal membaca data');
+             area.replaceChildren(el('p','Nilai awal dan remedial tersimpan terpisah. Koreksi memerlukan alasan.','muted'));
+             const first=summary?.[0];
+             if(first?.attempt_count>0) area.append(el('p','Nilai olahan saat ini: '+first.effective_score+' · kebijakan: '+first.policy_mode,'highlight'));
+             for(const attempt of attempts||[]){
+               const line=el('div',null,'student-row');
+               line.append(el('strong',(attempt.attempt_kind==='initial'?'Nilai awal':'Remedial')+' · '+attempt.score));
+               const edit=el('input');edit.type='number';edit.min='0';edit.step='0.01';edit.placeholder='Nilai koreksi';
+               const reason=el('input');reason.placeholder='Alasan koreksi (minimal 3 karakter)';
+               const save=el('button','Koreksi','secondary');save.type='button';
+               save.onclick=async()=>{
+                 const score=Number(edit.value);
+                 if(!edit.value.trim()||!Number.isFinite(score)||reason.value.trim().length<3){message(area,'Isi nilai dan alasan koreksi.',true);return;}
+                 save.disabled=true;
+                 const {error}=await supabase.rpc('kabarkelas_correct_attempt',{p_attempt:attempt.attempt_id,p_new_score:score,p_reason:reason.value.trim()});
+                 if(error){message(area,'Koreksi ditolak. Periksa nilai dan hak akses.',true);save.disabled=false;return;}
+                 try{await refresh();}catch{message(area,'Data tidak bisa dimuat ulang.',true);}
+               };
+               line.append(edit,reason,save);area.append(line);
+             }
+             const kind=(attempts||[]).some(x=>x.attempt_kind==='initial')?'remedial':'initial';
+             const scoreInput=el('input');scoreInput.type='number';scoreInput.min='0';scoreInput.step='0.01';scoreInput.placeholder=kind==='initial'?'Nilai awal':'Nilai remedial';
+             const note=el('input');note.placeholder='Catatan (opsional)';
+             const add=el('button',kind==='initial'?'Catat nilai awal':'Tambah remedial','secondary');add.type='button';
+             add.onclick=async()=>{
+               const value=Number(scoreInput.value);
+               if(!scoreInput.value.trim()||!Number.isFinite(value)){message(area,'Masukkan nilai yang benar.',true);return;}
+               add.disabled=true;
+               const {error}=await supabase.rpc('kabarkelas_record_attempt',{p_grade:grade.grade_id,p_kind:kind,p_score:value,p_note:note.value});
+               if(error){message(area,'Nilai tidak tersimpan. Periksa batas nilai dan penugasan.',true);add.disabled=false;return;}
+               try{await refresh();}catch{message(area,'Data tidak bisa dimuat ulang.',true);}
+             };
+             area.append(scoreInput,note,add);
+           };
+           manage.onclick=async()=>{manage.disabled=true;try{await refresh();}catch{message(area,'Fitur remedial belum dapat dimuat.',true);}finally{manage.disabled=false;}};
+           item.append(manage,area);
+         }
          gradeResults.append(item);
        }
      }catch{gradeResults.replaceChildren(el('p','Data penilaian tidak dapat dimuat.','error'))}

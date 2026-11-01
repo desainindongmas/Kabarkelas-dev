@@ -56,5 +56,27 @@ function logoutButton(box){const b=el('button','Keluar','secondary');b.onclick=a
 function showMembershipPicker(user,units){const box=panel('Pilih unit sekolah','Anda memiliki lebih dari satu penugasan. Pilih konteks kerja.');box.append(el('p',user.email,'muted'));
  for(const unit of units){const btn=el('button',`${unit.tenant_name} · ${unit.school_name||'Yayasan'} · ${unit.role}`,'unit');btn.onclick=()=>{activeMembership=unit;showHome(user,unit);};box.append(btn);} logoutButton(box);}
 function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan penugasan Anda telah diverifikasi.');box.append(el('p',user.email,'muted'));box.append(el('div',unit.tenant_name,'highlight'));box.append(el('p',`Unit: ${unit.school_name||'Tingkat yayasan'}`));box.append(el('p',`Peran: ${unit.role}`));box.append(el('p','Fitur nilai, rapor, dan data siswa belum dibuka sampai pengujian izin selesai.','notice'));
+ if(unit.role==='teacher' && unit.school_id) {
+   const studentsButton=el('button','Lihat siswa yang saya ajar','secondary');
+   const studentsRegion=el('div',null,'student-results');
+   studentsButton.onclick=async()=>{
+     studentsButton.disabled=true;
+     studentsRegion.replaceChildren(el('p','Memuat daftar siswa...','muted'));
+     try{
+       const {data,error}=await supabase.rpc('kabarkelas_my_students',{p_school_id:unit.school_id});
+       if(error) throw error;
+       studentsRegion.replaceChildren(el('h2','Siswa di kelas saya'));
+       if(!Array.isArray(data)||!data.length) studentsRegion.append(el('p','Belum ada siswa yang ditugaskan ke kelas Anda.','muted'));
+       else for(const s of data){
+         const item=el('div',null,'student-row');
+         item.append(el('strong',s.display_name),el('p',`${s.class_name} · ${s.local_student_no}`,'muted'));
+         studentsRegion.append(item);
+       }
+     }catch{
+       studentsRegion.replaceChildren(el('p','Daftar siswa tidak bisa dimuat. Coba lagi atau hubungi administrator.','error'));
+     }finally{studentsButton.disabled=false;}
+   };
+   box.append(studentsButton,studentsRegion);
+ }
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

@@ -136,11 +136,200 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
            };
            item.append(actionButton);
          }
+         if(unit.role==='teacher' && grade.grade_status==='draft'){
+           const manage=el('button','Kelola nilai awal & remedial','secondary');
+           manage.type='button';
+           const area=el('div',null,'student-results');
+           const refresh=async()=>{
+             area.replaceChildren(el('p','Memuat percobaan nilai...','muted'));
+             const [{data:attempts,error:attemptError},{data:summary,error:summaryError}]=await Promise.all([
+               supabase.rpc('kabarkelas_list_attempts',{p_grade:grade.grade_id}),
+               supabase.rpc('kabarkelas_attempt_summary',{p_grade:grade.grade_id})
+             ]);
+             if(attemptError||summaryError) throw new Error('Gagal membaca data');
+             area.replaceChildren(el('p','Nilai awal dan remedial tersimpan terpisah. Koreksi memerlukan alasan.','muted'));
+             const first=summary?.[0];
+             if(first?.attempt_count>0) area.append(el('p','Nilai olahan saat ini: '+first.effective_score+' · kebijakan: '+first.policy_mode,'highlight'));
+             for(const attempt of attempts||[]){
+               const line=el('div',null,'student-row');
+               line.append(el('strong',(attempt.attempt_kind==='initial'?'Nilai awal':'Remedial')+' · '+attempt.score));
+               const edit=el('input');edit.type='number';edit.min='0';edit.step='0.01';edit.placeholder='Nilai koreksi';
+               const reason=el('input');reason.placeholder='Alasan koreksi (minimal 3 karakter)';
+               const save=el('button','Koreksi','secondary');save.type='button';
+               save.onclick=async()=>{
+                 const score=Number(edit.value);
+                 if(!edit.value.trim()||!Number.isFinite(score)||reason.value.trim().length<3){message(area,'Isi nilai dan alasan koreksi.',true);return;}
+                 save.disabled=true;
+                 const {error}=await supabase.rpc('kabarkelas_correct_attempt',{p_attempt:attempt.attempt_id,p_new_score:score,p_reason:reason.value.trim()});
+                 if(error){message(area,'Koreksi ditolak. Periksa nilai dan hak akses.',true);save.disabled=false;return;}
+                 try{await refresh();}catch{message(area,'Data tidak bisa dimuat ulang.',true);}
+               };
+               line.append(edit,reason,save);area.append(line);
+             }
+             const kind=(attempts||[]).some(x=>x.attempt_kind==='initial')?'remedial':'initial';
+             const scoreInput=el('input');scoreInput.type='number';scoreInput.min='0';scoreInput.step='0.01';scoreInput.placeholder=kind==='initial'?'Nilai awal':'Nilai remedial';
+             const note=el('input');note.placeholder='Catatan (opsional)';
+             const add=el('button',kind==='initial'?'Catat nilai awal':'Tambah remedial','secondary');add.type='button';
+             add.onclick=async()=>{
+               const value=Number(scoreInput.value);
+               if(!scoreInput.value.trim()||!Number.isFinite(value)){message(area,'Masukkan nilai yang benar.',true);return;}
+               add.disabled=true;
+               const {error}=await supabase.rpc('kabarkelas_record_attempt',{p_grade:grade.grade_id,p_kind:kind,p_score:value,p_note:note.value});
+               if(error){message(area,'Nilai tidak tersimpan. Periksa batas nilai dan penugasan.',true);add.disabled=false;return;}
+               try{await refresh();}catch{message(area,'Data tidak bisa dimuat ulang.',true);}
+             };
+             area.append(scoreInput,note,add);
+             if(first?.attempt_count>0){
+               const finalize=el('button','Finalisasi nilai harian','secondary');finalize.type='button';
+               finalize.onclick=async()=>{
+                 if(!window.confirm('Finalisasi versi nilai saat ini sesuai kebijakan sekolah?'))return;
+                 finalize.disabled=true;
+                 const {data,error}=await supabase.rpc('kabarkelas_finalize_assessment',{p_grade:grade.grade_id});
+                 if(error){message(area,'Finalisasi ditolak. Periksa data dan penugasan.',true);finalize.disabled=false;return;}
+                 message(area,'Versi '+data.version+' '+(data.status==='released'?'telah dirilis kepada orang tua.':'difinalisasi untuk rapor.')+' Nilai: '+data.effective_score);
+                 finalize.disabled=false;
+               };area.append(finalize);
+             }
+           };
+           manage.onclick=async()=>{manage.disabled=true;try{await refresh();}catch{message(area,'Fitur remedial belum dapat dimuat.',true);}finally{manage.disabled=false;}};
+           item.append(manage,area);
+         }
          gradeResults.append(item);
        }
      }catch{gradeResults.replaceChildren(el('p','Data penilaian tidak dapat dimuat.','error'))}
      finally{gradeButton.disabled=false;}
    };box.append(gradeButton,gradeResults);
+ }
+ if(unit.role==='guardian' && unit.school_id){
+   const dailyButton=el('button','Lihat nilai harian yang sudah dirilis','secondary');
+   const dailyResults=el('div',null,'grade-results');
+   dailyButton.onclick=async()=>{
+     dailyButton.disabled=true;
+     const {data,error}=await supabase.rpc('kabarkelas_parent_assessments',{p_school:unit.school_id});
+     dailyResults.replaceChildren(el('h2','Nilai pembelajaran yang dirilis'));
+     if(error)dailyResults.append(el('p','Nilai harian tidak bisa dimuat.','error'));
+     else if(!data?.length)dailyResults.append(el('p','Belum ada nilai harian yang dirilis.','muted'));
+     else for(const item of data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',item.student_name+' · '+item.subject_name),el('p',item.assessment_title+' · Nilai '+item.score+' · Versi '+item.release_version,'muted'));
+       dailyResults.append(line);
+     }
+     dailyButton.disabled=false;
+   };
+   box.append(dailyButton,dailyResults);
+ }
+ if((unit.role==='teacher'||unit.role==='principal') && unit.school_id){
+   const reportsButton=el('button','Kelola rapor semester','secondary');
+   const reportsArea=el('div',null,'grade-results');
+   const refreshReports=async()=>{
+     reportsArea.replaceChildren(el('p','Memuat paket rapor...','muted'));
+     const {data,error}=await supabase.rpc('kabarkelas_my_class_reports',{p_school:unit.school_id});
+     if(error){reportsArea.replaceChildren(el('p','Paket rapor tidak dapat dimuat.','error'));return;}
+     reportsArea.replaceChildren(el('h2','Paket rapor semester'));
+     if(!data?.length)reportsArea.append(el('p','Belum ada paket rapor untuk sekolah ini.','muted'));
+     for(const report of data||[]){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',report.class_name+' · '+report.period_code),el('p','Status: '+report.report_status+' · Versi '+report.report_version,'muted'));
+       for(const action of report.allowed_actions||[]){
+         const labels={teacher_finalize:'Finalisasi guru',homeroom_review:'Periksa wali kelas',principal_sign:'Sahkan kepala sekolah',release:'Terbitkan rapor'};
+         const b=el('button',labels[action]||action,'secondary');b.type='button';
+         b.onclick=async()=>{
+           if(action==='release' && !window.confirm('Terbitkan rapor yang sudah disahkan kepada orang tua?'))return;
+           b.disabled=true;
+           const {error:transitionError}=await supabase.rpc('kabarkelas_transition_class_report',{
+             p_report:report.report_id,p_action:action,p_revision:report.report_revision
+           });
+           if(transitionError){message(line,'Tindakan ditolak atau versi rapor telah berubah. Muat ulang.',true);b.disabled=false;return;}
+           await refreshReports();
+         };
+         line.append(b);
+       }
+       reportsArea.append(line);
+     }
+     if(unit.role==='principal'){
+       const setup=await supabase.rpc('kabarkelas_report_setup_options',{p_school:unit.school_id});
+       if(setup.error){message(reportsArea,'Opsi pembuatan rapor belum dapat dimuat.',true);return;}
+       if(setup.data?.length){
+         const section=el('div',null,'student-row');
+         section.append(el('h3','Buat paket rapor kelas'));
+         const picker=el('select');
+         for(const [index,opt] of setup.data.entries()){
+           const o=el('option',opt.class_name+' · '+opt.period_code+' · Wali: '+opt.homeroom_label);
+           o.value=String(index);picker.append(o);
+         }
+         const create=el('button','Buat paket rapor','secondary');create.type='button';
+         create.onclick=async()=>{
+           const selected=setup.data[Number(picker.value)||0];
+           create.disabled=true;
+           const {error:createError}=await supabase.rpc('kabarkelas_create_class_report',{
+             p_class:selected.class_id,p_period:selected.period_id,p_homeroom:selected.homeroom_user_id
+           });
+           if(createError){message(section,'Pembuatan rapor ditolak. Periksa paket sebelumnya.',true);create.disabled=false;return;}
+           await refreshReports();
+         };
+         section.append(picker,create);reportsArea.append(section);
+       }
+     }
+   };
+   reportsButton.onclick=async()=>{reportsButton.disabled=true;try{await refreshReports();}catch{reportsArea.replaceChildren(el('p','Rapor tidak dapat dimuat.','error'));}finally{reportsButton.disabled=false;}};
+   box.append(reportsButton,reportsArea);
+ }
+ if(unit.role==='guardian' && unit.school_id){
+   const button=el('button','Lihat rapor yang diterbitkan','secondary');
+   const area=el('div',null,'grade-results');
+   button.onclick=async()=>{
+     button.disabled=true;
+     const {data,error}=await supabase.rpc('kabarkelas_my_released_reports',{p_school:unit.school_id});
+     area.replaceChildren(el('h2','Rapor semester'));
+     if(error)area.append(el('p','Rapor tidak dapat dimuat.','error'));
+     else if(!data?.length)area.append(el('p','Belum ada rapor yang diterbitkan.','muted'));
+     else for(const report of data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',report.student_name+' · '+report.class_name),el('p',report.period_code+' · Versi '+report.report_version,'muted'));
+       for(const grade of report.grades||[]){
+         line.append(el('p',grade.subject+' · '+grade.assessment+' · '+grade.score,'muted'));
+       }
+       area.append(line);
+     }
+     button.disabled=false;
+   };
+   box.append(button,area);
+ }
+ if(unit.role==='principal' && unit.school_id){
+   const policyButton=el('button','Atur kebijakan remedial & rilis nilai','secondary');
+   const policyArea=el('div',null,'student-results');
+   policyButton.onclick=async()=>{
+     policyButton.disabled=true;
+     const {data,error}=await supabase.rpc('kabarkelas_school_assessment_policy',{p_school:unit.school_id});
+     if(error){policyArea.replaceChildren(el('p','Kebijakan tidak dapat dimuat.','error'));policyButton.disabled=false;return;}
+     const policy=data?.[0]||{mode:'best_score',parent_visibility:'after_release',cap_percent:null,policy_version:0};
+     policyArea.replaceChildren(el('h2','Kebijakan penilaian sekolah'),el('p','Versi aktif: '+policy.policy_version,'muted'));
+     const mode=el('select');
+     for(const [v,label] of [['best_score','Ambil nilai terbaik'],['latest_score','Gunakan nilai remedial terbaru'],['best_capped','Nilai terbaik dengan batas']]){
+       const o=el('option',label);o.value=v;mode.append(o);
+     }
+     mode.value=policy.mode;
+     const cap=el('input');cap.type='number';cap.min='0';cap.max='100';cap.placeholder='Batas maksimum (%)';cap.value=String(policy.cap_percent??75);
+     const visibility=el('select');
+     for(const [v,label] of [['after_release','Rilis nilai harian setelah finalisasi'],['report_only','Hanya tampil di rapor resmi']]){
+       const o=el('option',label);o.value=v;visibility.append(o);
+     }
+     visibility.value=policy.parent_visibility;
+     const save=el('button','Simpan versi kebijakan baru','secondary');save.type='button';
+     save.onclick=async()=>{
+       if(mode.value==='latest_score' && !window.confirm('Kebijakan ini dapat membuat hasil olahan lebih rendah dari nilai awal. Lanjutkan?'))return;
+       save.disabled=true;
+       const {data:version,error:saveError}=await supabase.rpc('kabarkelas_set_school_assessment_policy',{
+         p_school:unit.school_id,p_mode:mode.value,p_cap:mode.value==='best_capped'?Number(cap.value):null,p_visibility:visibility.value
+       });
+       if(saveError){message(policyArea,'Perubahan kebijakan ditolak. Periksa penugasan atau nilai batas.',true);save.disabled=false;return;}
+       message(policyArea,'Kebijakan versi '+version+' tersimpan. Nilai yang telah diterbitkan tidak diubah.');
+       save.disabled=false;
+     };
+     policyArea.append(mode,cap,visibility,save);
+     policyButton.disabled=false;
+   };
+   box.append(policyButton,policyArea);
  }
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

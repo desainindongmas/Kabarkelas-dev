@@ -14,3 +14,10 @@ test('larangan melompati tahapan dan persetujuan diri',()=>{
  assert.equal(canTransition('draft','publish','principal'),false);
  assert.equal(canTransition('submitted','approve','principal',true),false);
 });
+
+test('aksi tidak dikenal dan status terminal ditolak',()=>{
+ for(const action of ['toString','constructor','delete',null,undefined]) assert.equal(canTransition('draft',action,'teacher'),false);
+ assert.equal(canTransition('published','publish','principal'),false);
+ assert.throws(()=>nextStatus('draft','publish','principal'));
+ assert.equal(canTransition('approved','publish','principal',true),false);
+});

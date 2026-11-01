@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
+import { availableActions } from './workflow-rules.js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -55,7 +56,7 @@ async function loadContext(){
 function logoutButton(box){const b=el('button','Keluar','secondary');b.onclick=async()=>{await supabase.auth.signOut();currentContext=null;activeMembership=null;showLogin();};box.append(b);}
 function showMembershipPicker(user,units){const box=panel('Pilih unit sekolah','Anda memiliki lebih dari satu penugasan. Pilih konteks kerja.');box.append(el('p',user.email,'muted'));
  for(const unit of units){const btn=el('button',`${unit.tenant_name} · ${unit.school_name||'Yayasan'} · ${unit.role}`,'unit');btn.onclick=()=>{activeMembership=unit;showHome(user,unit);};box.append(btn);} logoutButton(box);}
-function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan penugasan Anda telah diverifikasi.');box.append(el('p',user.email,'muted'));box.append(el('div',unit.tenant_name,'highlight'));box.append(el('p',`Unit: ${unit.school_name||'Tingkat yayasan'}`));box.append(el('p',`Peran: ${unit.role}`));box.append(el('p','Fitur nilai, rapor, dan data siswa belum dibuka sampai pengujian izin selesai.','notice'));
+function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan penugasan Anda telah diverifikasi.');box.append(el('p',user.email,'muted'));box.append(el('div',unit.tenant_name,'highlight'));box.append(el('p',`Unit: ${unit.school_name||'Tingkat yayasan'}`));box.append(el('p',`Peran: ${unit.role}`));box.append(el('p','Nilai tersedia sesuai penugasan. Orang tua hanya melihat nilai yang sudah diterbitkan.','notice'));
  if(unit.role==='teacher' && unit.school_id) {
    const studentsButton=el('button','Lihat siswa yang saya ajar','secondary');
    const studentsRegion=el('div',null,'student-results');
@@ -104,13 +105,37 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
    gradeButton.onclick=async()=>{
      gradeButton.disabled=true;gradeResults.replaceChildren(el('p','Memuat penilaian...','muted'));
      try{
-       const {data,error}=await supabase.rpc('kabarkelas_my_grades',{p_school_id:unit.school_id});
+       const {data,error}=await supabase.rpc('kabarkelas_grade_workflow',{p_school_id:unit.school_id});
        if(error) throw error;
        gradeResults.replaceChildren(el('h2','Penilaian akademik'));
        if(!Array.isArray(data)||!data.length) gradeResults.append(el('p','Belum ada nilai yang dapat ditampilkan.','muted'));
        else for(const grade of data){
          const item=el('div',null,'student-row');
          item.append(el('strong',grade.student_name+' · '+grade.subject_name),el('p',grade.assessment_title+' · Nilai '+grade.score+' · '+grade.grade_status,'muted'));
+         for(const action of availableActions(grade,unit.role)){
+           const actionButton=el('button',({submit:'Submit',approve:'Approve',publish:'Publish'})[action]);
+           actionButton.type='button';
+           actionButton.onclick=async()=>{
+             actionButton.disabled=true;
+             message(item,'Memproses...');
+             try{
+               const {error}=await supabase.rpc('kabarkelas_transition_grade',{
+                 p_grade_id:grade.grade_id,p_action:action,p_expected_revision:grade.revision,
+               });
+               if(error) throw error;
+               await gradeButton.onclick();
+               if(gradeResults.isConnected) message(gradeResults,'Transisi nilai berhasil.');
+             }catch(error){
+               if(error.code==='40001'||error.code==='55000'){
+                 await gradeButton.onclick();
+                 message(gradeResults,'Status sudah berubah. Data terbaru dimuat; periksa kembali sebelum melanjutkan.',true);
+               }else{
+                 message(item,'Transisi gagal. Periksa koneksi dan penugasan, lalu muat ulang nilai sebelum mencoba lagi.',true);
+               }
+             }finally{if(actionButton.isConnected) actionButton.disabled=false;}
+           };
+           item.append(actionButton);
+         }
          gradeResults.append(item);
        }
      }catch{gradeResults.replaceChildren(el('p','Data penilaian tidak dapat dimuat.','error'))}

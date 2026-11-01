@@ -295,5 +295,41 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
    };
    box.append(button,area);
  }
+ if(unit.role==='principal' && unit.school_id){
+   const policyButton=el('button','Atur kebijakan remedial & rilis nilai','secondary');
+   const policyArea=el('div',null,'student-results');
+   policyButton.onclick=async()=>{
+     policyButton.disabled=true;
+     const {data,error}=await supabase.rpc('kabarkelas_school_assessment_policy',{p_school:unit.school_id});
+     if(error){policyArea.replaceChildren(el('p','Kebijakan tidak dapat dimuat.','error'));policyButton.disabled=false;return;}
+     const policy=data?.[0]||{mode:'best_score',parent_visibility:'after_release',cap_percent:null,policy_version:0};
+     policyArea.replaceChildren(el('h2','Kebijakan penilaian sekolah'),el('p','Versi aktif: '+policy.policy_version,'muted'));
+     const mode=el('select');
+     for(const [v,label] of [['best_score','Ambil nilai terbaik'],['latest_score','Gunakan nilai remedial terbaru'],['best_capped','Nilai terbaik dengan batas']]){
+       const o=el('option',label);o.value=v;mode.append(o);
+     }
+     mode.value=policy.mode;
+     const cap=el('input');cap.type='number';cap.min='0';cap.max='100';cap.placeholder='Batas maksimum (%)';cap.value=String(policy.cap_percent??75);
+     const visibility=el('select');
+     for(const [v,label] of [['after_release','Rilis nilai harian setelah finalisasi'],['report_only','Hanya tampil di rapor resmi']]){
+       const o=el('option',label);o.value=v;visibility.append(o);
+     }
+     visibility.value=policy.parent_visibility;
+     const save=el('button','Simpan versi kebijakan baru','secondary');save.type='button';
+     save.onclick=async()=>{
+       if(mode.value==='latest_score' && !window.confirm('Kebijakan ini dapat membuat hasil olahan lebih rendah dari nilai awal. Lanjutkan?'))return;
+       save.disabled=true;
+       const {data:version,error:saveError}=await supabase.rpc('kabarkelas_set_school_assessment_policy',{
+         p_school:unit.school_id,p_mode:mode.value,p_cap:mode.value==='best_capped'?Number(cap.value):null,p_visibility:visibility.value
+       });
+       if(saveError){message(policyArea,'Perubahan kebijakan ditolak. Periksa penugasan atau nilai batas.',true);save.disabled=false;return;}
+       message(policyArea,'Kebijakan versi '+version+' tersimpan. Nilai yang telah diterbitkan tidak diubah.');
+       save.disabled=false;
+     };
+     policyArea.append(mode,cap,visibility,save);
+     policyButton.disabled=false;
+   };
+   box.append(policyButton,policyArea);
+ }
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

@@ -33,6 +33,35 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
     const checks = results.flatMap(r=>r.rows).filter(r=>r.test_name);
     assert.ok(checks.length>=50,`Expected >=50 SQL assertions, got ${checks.length}`);
     for(const c of checks) await t.test(c.test_name,()=>assert.equal(c.passed,true));
+    await t.test('G0.5.1 attempt and correction server authorization', async () => {
+      const testClient = new pg.Client({connectionString:url.href}); await testClient.connect();
+      try {
+        await testClient.query('BEGIN');
+        await testClient.query(fixtures);
+        const asUser=async n=>{
+          await testClient.query('RESET ROLE');
+          await testClient.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);
+          await testClient.query('SET LOCAL ROLE authenticated');
+        };
+        await asUser(1);
+        const grade=id(801);
+        const first=await testClient.query("SELECT public.kabarkelas_record_attempt($1,'initial',65,'Nilai awal') id",[grade]);
+        const attempt=first.rows[0].id;
+        await testClient.query("SELECT public.kabarkelas_record_attempt($1,'remedial',58,'Remedial')",[grade]);
+        await testClient.query("SELECT public.kabarkelas_correct_attempt($1,70,'Salah mengetik nilai')",[attempt]);
+        await testClient.query('RESET ROLE');
+        const current=await testClient.query('SELECT score FROM public.assessment_attempts WHERE id=$1',[attempt]);
+        assert.equal(Number(current.rows[0].score),70);
+        const audit=await testClient.query('SELECT previous_score,corrected_score FROM public.assessment_corrections WHERE attempt_id=$1',[attempt]);
+        assert.equal(Number(audit.rows[0].previous_score),65);
+        assert.equal(Number(audit.rows[0].corrected_score),70);
+        await asUser(2);
+        await assert.rejects(testClient.query("SELECT public.kabarkelas_record_attempt($1,'remedial',90,'Tidak berhak')",[grade]),e=>e.code==='42501');
+      } finally {
+        await testClient.query('ROLLBACK').catch(()=>{});
+        await testClient.end();
+      }
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

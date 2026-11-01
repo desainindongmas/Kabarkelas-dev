@@ -150,6 +150,39 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.end();
       }
     });
+    await t.test('G0.5.1 correction after release retains old snapshot and publishes new version',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');
+        await client.query(fixtures);
+        const asUser=async n=>{
+          await client.query('RESET ROLE');
+          await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);
+          await client.query('SET LOCAL ROLE authenticated');
+        };
+        await asUser(1);
+        const initial=await client.query("SELECT public.kabarkelas_record_attempt($1,'initial',65,'Nilai awal') id",[id(801)]);
+        await client.query('SELECT public.kabarkelas_finalize_assessment($1)',[id(801)]);
+        await client.query("SELECT public.kabarkelas_correct_attempt($1,70,'Salah memasukkan nilai')",[initial.rows[0].id]);
+        const updated=await client.query('SELECT public.kabarkelas_finalize_assessment($1) result',[id(801)]);
+        assert.equal(updated.rows[0].result.version,2);
+        assert.equal(updated.rows[0].result.effective_score,70);
+        await asUser(3);
+        const guardian=await client.query('SELECT * FROM public.kabarkelas_parent_assessments($1)',[id(201)]);
+        assert.equal(guardian.rows.length,1);
+        assert.equal(guardian.rows[0].release_version,2);
+        assert.equal(Number(guardian.rows[0].score),70);
+        await client.query('RESET ROLE');
+        const originals=await client.query('SELECT version,effective_score FROM public.assessment_releases WHERE grade_id=$1 ORDER BY version',[id(801)]);
+        assert.deepEqual(originals.rows.map(x=>Number(x.effective_score)),[65,70]);
+        await client.query('SAVEPOINT immutable_test');
+        await assert.rejects(client.query('UPDATE public.assessment_releases SET effective_score=1 WHERE grade_id=$1',[id(801)]),e=>e.code==='55000');
+        await client.query('ROLLBACK TO SAVEPOINT immutable_test');
+      }finally{
+        await client.query('ROLLBACK').catch(()=>{});
+        await client.end();
+      }
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

@@ -466,8 +466,53 @@ function decorateDashboard(box,user,unit){
     const item=el('a',name,'nav-item');item.href='#'+group.id;
     nav.append(item);sections.append(group);
   }
-  content.append(top,welcome,sections);
+  content.append(top,welcome,buildLiveOverview(unit),sections);
   box.replaceChildren(nav,content);
   box.setAttribute('aria-label','Dashboard KabarKelas');
 }
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();
+
+function buildLiveOverview(unit){
+  const section=el('section',null,'live-overview');
+  section.setAttribute('aria-label','Ringkasan data sekolah');
+  section.append(el('h2','Ringkasan dari data sekolah'));
+  const intro=el('p','Statistik dihitung dari data yang dapat diakses oleh peran Anda. Angka kosong bukan data simulasi.','muted');
+  const grid=el('div',null,'live-overview-grid');
+  const state=el('p','Menyiapkan ringkasan...','muted');
+  section.append(intro,grid,state);
+  const button=el('button','Perbarui ringkasan','secondary');button.type='button';
+  section.append(button);
+  const createCard=(label,value,detail)=>{
+    const card=el('div',null,'live-kpi-card');
+    card.append(el('p',label,'muted'),el('strong',String(value),'live-kpi-value'),el('p',detail,'muted'));grid.append(card);
+  };
+  let generation=0;
+  const load=async()=>{
+    const version=++generation;
+    if(!unit.school_id){grid.replaceChildren();state.textContent='Ringkasan agregat yayasan belum tersedia dari API yang berizin.';return;}
+    button.disabled=true;state.textContent='Mengambil data terbaru...';grid.replaceChildren();
+    try{
+      if(unit.role==='foundation_admin'){
+        state.textContent='Data agregat yayasan belum tersedia. Data siswa individual tidak dibuka.';return;
+      }
+      const studentMethod=unit.role==='teacher'?'kabarkelas_my_students':'kabarkelas_my_role_students';
+      const {data:students,error:studentError}=await supabase.rpc(studentMethod,{p_school_id:unit.school_id});
+      if(version!==generation)return;
+      if(studentError||!Array.isArray(students))throw new Error('Student data unavailable');
+      createCard(unit.role==='guardian'?'Anak terhubung':'Siswa dalam cakupan',new Set(students.map(x=>x.id||x.local_student_no).filter(Boolean)).size,'Sesuai penugasan dan hak akses');
+      if(unit.role==='principal'||unit.role==='teacher'){
+        const {data:alerts,error:alertError}=await supabase.rpc('kabarkelas_ews_my_alerts',{p_school:unit.school_id});
+        if(version!==generation)return;
+        if(!alertError&&Array.isArray(alerts)){
+          createCard('Peringatan perlu tindak lanjut',alerts.filter(x=>x.alert_status==='open'||x.alert_status==='under_review').length,'Peringatan EWS yang belum ditutup');
+        }else createCard('Peringatan EWS','—','Belum dapat dimuat');
+      }
+      state.textContent='Ringkasan berhasil dimuat dari API sekolah.';
+    }catch{
+      if(version===generation){grid.replaceChildren();state.textContent='Ringkasan belum dapat dimuat. Tidak ada angka perkiraan yang ditampilkan.';}
+    }finally{if(version===generation)button.disabled=false;}
+  };
+  button.onclick=load;
+  void load();
+  return section;
+}

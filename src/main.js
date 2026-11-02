@@ -348,7 +348,22 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
        line.append(el('p',entry.requires_review?'Perlu ditinjau oleh guru — bukan label siswa':'Belum ada sinyal akademik berdasarkan aturan simulasi','muted'));
        ewsArea.append(line);
      }
-     ewsArea.append(el('p','Aturan 70% adalah simulasi; absensi dan tindak lanjut belum diaktifkan. Data ini tidak dibagikan ke orang tua.','muted'));
+     const today=new Date();
+     const end=today.toISOString().slice(0,10);
+     const start=new Date(today.getTime()-29*86400000).toISOString().slice(0,10);
+     const attendance=await supabase.rpc('kabarkelas_ews_attendance_preview',{
+       p_school:unit.school_id,p_start:start,p_end:end,p_absent_threshold:3
+     });
+     ewsArea.append(el('h3','Kehadiran — 30 hari terakhir'));
+     if(attendance.error) ewsArea.append(el('p','Data kehadiran belum bisa dimuat.','muted'));
+     else if(!attendance.data?.length) ewsArea.append(el('p','Belum ada sesi absensi yang diterbitkan pada periode ini.','muted'));
+     else for(const record of attendance.data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',record.student_name),el('p',record.unexcused_absences+' tanpa keterangan dari '+record.session_count+' sesi','muted'));
+       if(record.requires_review)line.append(el('p','Perlu peninjauan oleh guru','muted'));
+       ewsArea.append(line);
+     }
+     ewsArea.append(el('p','Ambang 70% dan 3 ketidakhadiran tanpa keterangan adalah aturan simulasi; tindak lanjut belum diaktifkan. Data tidak dibagikan ke orang tua.','muted'));
      ewsButton.disabled=false;
    };
    box.append(ewsButton,ewsArea);

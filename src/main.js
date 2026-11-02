@@ -466,7 +466,7 @@ function decorateDashboard(box,user,unit){
     const item=el('a',name,'nav-item');item.href='#'+group.id;
     nav.append(item);sections.append(group);
   }
-  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='teacher' && unit.school_id)content.append(buildTeacherDevelopment(unit));if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}content.append(sections);
+  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='principal' && unit.school_id)content.append(buildPrincipalRubricManager(unit));if(unit.role==='teacher' && unit.school_id)content.append(buildTeacherDevelopment(unit));if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}content.append(sections);
   box.replaceChildren(nav,content);
   box.setAttribute('aria-label','Dashboard KabarKelas');
 }
@@ -566,6 +566,23 @@ function buildLiveOverview(unit){
   return section;
 }
 
+function buildPrincipalRubricManager(unit){
+ const section=el('section',null,'guardian-trends');section.setAttribute('aria-label','Pengelolaan rubrik sekolah');
+ section.append(el('h2','Rubrik kompetensi & karakter'),el('p','Kepala sekolah menyetujui indikator sebelum digunakan oleh guru.','muted'));
+ const form=el('form');
+ const domain=el('select');domain.setAttribute('aria-label','Domain rubrik');
+ for(const [code,label] of [['academic_competency','Kompetensi akademik'],['character','Karakter']]){const opt=el('option',label);opt.value=code;domain.append(opt);}
+ const code=el('input');code.placeholder='Kode indikator';code.required=true;code.maxLength=50;
+ const label=el('input');label.placeholder='Nama indikator';label.required=true;label.maxLength=120;
+ const save=el('button','Setujui indikator');save.type='submit';
+ form.append(domain,code,label,save);
+ form.onsubmit=async(event)=>{
+   event.preventDefault();save.disabled=true;
+   const {error}=await supabase.rpc('kabarkelas_approve_development_indicator',{p_school:unit.school_id,p_domain:domain.value,p_code:code.value.trim(),p_label:label.value.trim()});
+   message(section,error?'Persetujuan ditolak.':'Indikator disetujui dan dapat dipakai guru.',!!error);save.disabled=false;
+ };
+ section.append(form);return section;
+}
 function buildTeacherDevelopment(unit){
  const wrap=el('section',null,'guardian-trends');wrap.setAttribute('aria-label','Observasi kompetensi dan karakter guru');
  wrap.append(el('h2','Observasi kompetensi & karakter'),el('p','Skala 1–4 berdasarkan bukti pengamatan. Data draf tidak dapat dilihat orang tua.','muted'));
@@ -581,19 +598,30 @@ function buildTeacherDevelopment(unit){
    for(const record of data){const opt=el('option',record.student_name+' — '+record.class_name);opt.value=String(data.indexOf(record));student.append(opt);}
    const domain=el('select');domain.setAttribute('aria-label','Domain observasi');
    for(const [key,label] of [['academic_competency','Kompetensi akademik'],['character','Karakter']]){const opt=el('option',label);opt.value=key;domain.append(opt);}
-   const code=el('input');code.placeholder='Kode indikator (mis. KOM-01)';code.required=true;code.maxLength=50;
-   const label=el('input');label.placeholder='Nama indikator yang diamati';label.required=true;label.maxLength=120;
+   const indicatorsResponse=await supabase.rpc('kabarkelas_development_indicators',{p_school:unit.school_id});
+   if(indicatorsResponse.error)throw new Error('Rubric unavailable');
+   const indicators=indicatorsResponse.data||[];
+   if(!indicators.length){area.replaceChildren(el('p','Kepala sekolah belum menyetujui rubrik observasi.','muted'));return;}
+   const rubric=el('select');rubric.setAttribute('aria-label','Indikator rubrik disetujui');
+   const renderRubric=()=>{
+     rubric.replaceChildren();
+     for(const [index,item] of indicators.entries())if(item.domain===domain.value){
+       const opt=el('option',item.indicator_label+' ('+item.indicator_code+')');opt.value=String(index);rubric.append(opt);
+     }
+   };
+   domain.onchange=renderRubric;renderRubric();
    const score=el('select');score.setAttribute('aria-label','Tingkat perkembangan');
    for(let i=1;i<=4;i++){const opt=el('option','Tingkat '+i);opt.value=String(i);score.append(opt);}
    const evidence=el('textarea');evidence.placeholder='Bukti pengamatan (minimal 8 karakter)';evidence.required=true;evidence.minLength=8;evidence.maxLength=1000;
    const publish=el('input');publish.type='checkbox';publish.style.width='auto';publish.setAttribute('aria-label','Terbitkan ke orang tua');
    const publishLabel=el('label','Terbitkan kepada orang tua setelah diperiksa');publishLabel.prepend(publish);
    const submit=el('button','Simpan observasi');submit.type='submit';
-   form.append(student,domain,code,label,score,evidence,publishLabel,submit);
+   form.append(student,domain,rubric,score,evidence,publishLabel,submit);
    form.onsubmit=async(event)=>{
     event.preventDefault();const record=data[Number(student.value)];if(!record)return;
+    const approved=indicators[Number(rubric.value)];if(!approved){message(area,'Belum ada indikator disetujui untuk domain ini.',true);return;}
     submit.disabled=true;
-    const {error}=await supabase.rpc('kabarkelas_teacher_development_observe',{p_school:unit.school_id,p_student:record.student_id,p_class:record.class_id,p_domain:domain.value,p_code:code.value.trim(),p_label:label.value.trim(),p_score:Number(score.value),p_evidence:evidence.value.trim(),p_publish:publish.checked});
+    const {error}=await supabase.rpc('kabarkelas_teacher_development_observe',{p_school:unit.school_id,p_student:record.student_id,p_class:record.class_id,p_domain:domain.value,p_code:approved.indicator_code,p_label:approved.indicator_label,p_score:Number(score.value),p_evidence:evidence.value.trim(),p_publish:publish.checked});
     message(area,error?'Observasi ditolak. Periksa penugasan dan nilai.':publish.checked?'Observasi berhasil diterbitkan.':'Observasi berhasil disimpan sebagai draf.',!!error);
     submit.disabled=false;if(!error){evidence.value='';publish.checked=false;}
    };

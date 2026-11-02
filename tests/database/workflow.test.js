@@ -250,6 +250,28 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('ROLLBACK TO SAVEPOINT school');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.6 principals activate rules; scans are idempotent; guardians denied',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        await client.query('SAVEPOINT teacher');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb)",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT teacher');
+        await asUser(2);
+        const configured=await client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb) version",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]);
+        assert.equal(configured.rows[0].version,1);
+        const a=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        const b=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        assert.equal(a.rows[0].data.created,0);
+        assert.equal(b.rows[0].data.created,0);
+        await asUser(3);
+        await client.query('SAVEPOINT guardian');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02')",[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT guardian');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

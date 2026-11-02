@@ -463,7 +463,7 @@ function decorateDashboard(box,user,unit){
     const group=groups[i];
     group.id='module-'+i;
     const name=group.querySelector('.module-title')?.textContent||'Modul';
-    const item=el('button',name,'nav-item');item.type='button';
+    const item=el('button','Buka: '+name,'nav-item');item.type='button';
     item.onclick=()=>group.scrollIntoView({behavior:'smooth',block:'start'});
     nav.append(item);sections.append(group);
   }

@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {evaluateEarlyWarning} from '../src/ews-rules.js';
+const grade=(score,finalized=true)=>({score,maxScore:100,finalized});
+test('satu nilai tidak cukup memicu sinyal akademik',()=>assert.deepEqual(evaluateEarlyWarning({grades:[grade(50)]}).signals,[]));
+test('dua nilai final rendah memicu tinjauan',()=>assert.equal(evaluateEarlyWarning({grades:[grade(60),grade(65)]}).signals[0].code,'academic_review'));
+test('draft dan nilai tidak valid tidak dihitung',()=>assert.equal(evaluateEarlyWarning({grades:[grade(60),grade(50,false),grade(NaN)]}).gradeSampleSize,1));
+test('remedial selesai tercermin pada skor olahan yang dipasok',()=>assert.equal(evaluateEarlyWarning({grades:[grade(70),grade(82)]}).status,'no_alert'));
+test('ketidakhadiran mencapai tiga memicu tinjauan',()=>assert.equal(evaluateEarlyWarning({attendance:['absent','present','absent','absent']}).signals[0].code,'attendance_review'));
+test('data kosong bukan sinyal risiko',()=>assert.equal(evaluateEarlyWarning({}).status,'no_alert'));
+test('ambang tak valid ditolak',()=>assert.throws(()=>evaluateEarlyWarning({}, {minGrades:0}),RangeError));

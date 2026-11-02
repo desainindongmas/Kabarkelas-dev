@@ -334,6 +334,24 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         assert.equal(grants.rows[0].n,0);
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.8.2 guardian trend RPC denies principals and unauthorized schools',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(3);
+        const visible=await client.query('SELECT * FROM public.kabarkelas_guardian_academic_trends($1)',[id(201)]);
+        assert.ok(Array.isArray(visible.rows));
+        await asUser(2);
+        await client.query('SAVEPOINT principal');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_guardian_academic_trends($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT principal');
+        await asUser(5);
+        await client.query('SAVEPOINT school');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_guardian_academic_trends($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT school');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

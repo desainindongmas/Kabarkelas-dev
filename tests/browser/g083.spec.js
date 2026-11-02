@@ -8,6 +8,7 @@ async function setup(page,role){
  if(p==='/auth/v1/user')data=user;
  else if(p.endsWith('/kabarkelas_my_context'))data={state:'active',units:[{membership_id:'m',tenant_id:'t',tenant_name:'Yayasan Demo',school_id:'s',school_name:'Sekolah Demo',role}]};
  else if(p.endsWith('/kabarkelas_guardian_development_radar'))data=[{student_name:'Nadia',domain:'character',indicator_code:'CHAR-01',indicator_label:'Kemandirian',average_score:3,observation_count:2},{student_name:'Nadia',domain:'character',indicator_code:'CHAR-02',indicator_label:'Kerja sama',average_score:4,observation_count:1},{student_name:'Nadia',domain:'character',indicator_code:'CHAR-03',indicator_label:'Tanggung jawab',average_score:2,observation_count:1}];
+ else if(p.endsWith('/kabarkelas_development_indicators'))data=[{domain:'character',indicator_code:'CHAR-01',indicator_label:'Kemandirian'}];
  else if(p.endsWith('/kabarkelas_teacher_development_options'))data=[{student_id:'student-1',student_name:'Nadia',class_id:'class-1',class_name:'Kelas 5A'}];
  else if(p.endsWith('/kabarkelas_teacher_development_observe'))data='observation-id';
  else throw new Error('Unexpected '+p);
@@ -28,8 +29,8 @@ test('teacher can record evidence but cannot see guardian radar',async({page})=>
  await expect(page.getByRole('region',{name:'Grafik jaring perkembangan'})).toHaveCount(0);
  const region=page.getByRole('region',{name:'Observasi kompetensi dan karakter guru'});
  await region.getByRole('button',{name:'Pilih siswa untuk observasi'}).click();
- await region.getByPlaceholder('Kode indikator (mis. KOM-01)').fill('CHAR-01');
- await region.getByPlaceholder('Nama indikator yang diamati').fill('Kemandirian');
+ await region.getByRole('combobox',{name:'Domain observasi'}).selectOption('character');
+ await expect(region.getByRole('combobox',{name:'Indikator rubrik disetujui'})).toBeVisible();
  await region.getByPlaceholder('Bukti pengamatan (minimal 8 karakter)').fill('Mengerjakan tugas secara mandiri');
  await region.getByRole('button',{name:'Simpan observasi'}).click();
  await expect(region.getByText('Observasi berhasil disimpan sebagai draf.')).toBeVisible();

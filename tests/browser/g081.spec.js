@@ -19,6 +19,7 @@ async function setup(page,role,{fail=false}={}){
 test('G0.8.1 teacher sees API-based student and active EWS counts',async({page})=>{
  await setup(page,'teacher');
  const region=page.getByRole('region',{name:'Ringkasan data sekolah'});
+ await region.getByRole('button',{name:'Perbarui ringkasan'}).click();
  await expect(region.getByText('Siswa dalam cakupan')).toBeVisible();
  await expect(region.getByText('2', {exact:true})).toHaveCount(2);
  await expect(region.getByText('Ringkasan berhasil dimuat dari API sekolah.')).toBeVisible();
@@ -26,12 +27,14 @@ test('G0.8.1 teacher sees API-based student and active EWS counts',async({page})
 test('G0.8.1 guardian cannot see EWS cards',async({page})=>{
  await setup(page,'guardian');
  const region=page.getByRole('region',{name:'Ringkasan data sekolah'});
+ await region.getByRole('button',{name:'Perbarui ringkasan'}).click();
  await expect(region.getByText('Anak terhubung')).toBeVisible();
  await expect(region.getByText('Peringatan perlu tindak lanjut')).toHaveCount(0);
 });
 test('G0.8.1 API denial does not fabricate metrics',async({page})=>{
  await setup(page,'teacher',{fail:true});
  const region=page.getByRole('region',{name:'Ringkasan data sekolah'});
+ await region.getByRole('button',{name:'Perbarui ringkasan'}).click();
  await expect(region.getByText('Ringkasan belum dapat dimuat. Tidak ada angka perkiraan yang ditampilkan.')).toBeVisible();
  await expect(region.locator('.live-kpi-card')).toHaveCount(0);
 });

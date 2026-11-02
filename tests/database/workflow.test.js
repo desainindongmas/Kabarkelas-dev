@@ -229,6 +229,27 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('ROLLBACK TO SAVEPOINT cross_school_denied');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.6 alert inbox and update deny guardians and other-school users',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        const empty=await client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]);
+        assert.equal(empty.rows.length,0);
+        await client.query('SAVEPOINT missing');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_update_alert($1,'open','resolved','Tidak sah')",[id(810)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT missing');
+        await asUser(3);
+        await client.query('SAVEPOINT guardian');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT guardian');
+        await asUser(5);
+        await client.query('SAVEPOINT school');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT school');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

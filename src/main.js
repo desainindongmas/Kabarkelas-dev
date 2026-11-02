@@ -457,14 +457,13 @@ function decorateDashboard(box,user,unit){
   const brand=el('div','📚 KabarKelas','dashboard-brand');
   const role=el('p',({teacher:'Guru',principal:'Kepala sekolah',guardian:'Orang tua',foundation_admin:'Yayasan'})[unit.role]||unit.role,'role-label');
   nav.append(brand,role,el('p','MENU UTAMA','nav-label'));
-  const mainLink=el('button','Ringkasan','nav-item');mainLink.type='button';
-  mainLink.onclick=()=>top.scrollIntoView({behavior:'smooth',block:'start'});nav.append(mainLink);
+  const mainLink=el('a','Ringkasan','nav-item');mainLink.href='#dashboard-overview';
+  top.id='dashboard-overview';nav.append(mainLink);
   for(let i=0;i<groups.length;i++){
     const group=groups[i];
     group.id='module-'+i;
     const name=group.querySelector('.module-title')?.textContent||'Modul';
-    const item=el('button','Buka: '+name,'nav-item');item.type='button';
-    item.onclick=()=>group.scrollIntoView({behavior:'smooth',block:'start'});
+    const item=el('a',name,'nav-item');item.href='#'+group.id;
     nav.append(item);sections.append(group);
   }
   content.append(top,welcome,sections);

@@ -42,3 +42,5 @@ body:has(.dashboard-card){display:block;padding:0;background:#f4f7f8}
 @media(min-width:1500px){.dashboard-sections{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1050px){.dashboard-card{grid-template-columns:195px minmax(0,1fr)}.dashboard-sections{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:700px){.dashboard-card{display:flex;flex-direction:column}.dashboard-nav{position:relative;top:auto;height:auto;max-height:175px;display:flex;flex-direction:row;align-items:center;overflow:auto;gap:6px;padding:11px 15px;border-right:0;border-bottom:1px solid #e0eaea}.dashboard-brand{font-size:16px;margin:0;flex:none}.role-label,.nav-label{display:none}.dashboard-nav .nav-item{white-space:nowrap;width:auto;flex:none;padding:10px;font-size:12px;min-height:42px}.dashboard-main{padding:22px 14px 54px}.welcome-panel{padding:20px}.welcome-panel strong{font-size:20px}.dashboard-module{padding:17px}}
+
+@media(min-width:800px){.card.dashboard-card:has(.student-row){max-width:none;width:100%}}

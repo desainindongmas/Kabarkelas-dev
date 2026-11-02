@@ -272,6 +272,28 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('ROLLBACK TO SAVEPOINT guardian');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.6 review followup succeeds, audits, and refuses stale replay',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb)",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]);
+        await client.query('RESET ROLE');
+        const made=await client.query("INSERT INTO public.ews_alerts(tenant_id,school_id,student_id,rule_id,window_key,severity,explanation) SELECT r.tenant_id,r.school_id,$1,r.id,'2026-11-02','review','Contoh simulasi untuk ditinjau' FROM public.ews_rules r WHERE r.school_id=$2 AND r.rule_key='academic_low_average' RETURNING id",[id(401),id(201)]);
+        const alert=made.rows[0].id;
+        await asUser(1);
+        const changed=await client.query("SELECT public.kabarkelas_ews_update_alert($1,'open','under_review','Guru meninjau konteks') data",[alert]);
+        assert.equal(changed.rows[0].data.status,'under_review');
+        await client.query('SAVEPOINT stale');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_update_alert($1,'open','dismissed','Pengulangan tidak valid')",[alert]),e=>e.code==='40001');
+        await client.query('ROLLBACK TO SAVEPOINT stale');
+        await client.query("SELECT public.kabarkelas_ews_update_alert($1,'under_review','resolved','Pendampingan telah dilaksanakan')",[alert]);
+        await client.query('RESET ROLE');
+        const rows=await client.query('SELECT previous_status,new_status,note FROM public.ews_followups WHERE alert_id=$1 ORDER BY occurred_at',[alert]);
+        assert.deepEqual(rows.rows.map(x=>x.new_status),['under_review','resolved']);
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

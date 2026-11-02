@@ -364,6 +364,30 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
        ewsArea.append(line);
      }
      ewsArea.append(el('p','Ambang 70% dan 3 ketidakhadiran tanpa keterangan adalah aturan simulasi; tindak lanjut belum diaktifkan. Data tidak dibagikan ke orang tua.','muted'));
+     const alerts=await supabase.rpc('kabarkelas_ews_my_alerts',{p_school:unit.school_id});
+     ewsArea.append(el('h3','Tindak lanjut peringatan'));
+     if(alerts.error) ewsArea.append(el('p','Daftar tindak lanjut belum bisa dimuat.','muted'));
+     else if(!alerts.data?.length) ewsArea.append(el('p','Belum ada peringatan yang diaktifkan sekolah.','muted'));
+     else for(const alert of alerts.data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',alert.student_name+' · '+alert.alert_status),el('p',alert.explanation,'muted'));
+       const note=el('input');note.placeholder='Catatan tindak lanjut (minimal 5 karakter)';
+       line.append(note);
+       const actions=alert.alert_status==='open'?['under_review','dismissed']:alert.alert_status==='under_review'?['resolved','dismissed']:['open'];
+       for(const action of actions){
+         const btn=el('button',({under_review:'Mulai tinjauan',resolved:'Selesaikan',dismissed:'Tutup tanpa tindakan',open:'Buka kembali'})[action],'secondary');
+         btn.type='button';
+         btn.onclick=async()=>{
+           if(note.value.trim().length<5){message(line,'Isi catatan minimal 5 karakter.',true);return;}
+           btn.disabled=true;
+           const {error}=await supabase.rpc('kabarkelas_ews_update_alert',{p_alert:alert.alert_id,p_expected_status:alert.alert_status,p_next_status:action,p_note:note.value.trim()});
+           if(error){message(line,'Perubahan ditolak atau status telah berubah. Muat ulang.',true);btn.disabled=false;return;}
+           ewsButton.click();
+         };
+         line.append(btn);
+       }
+       ewsArea.append(line);
+     }
      ewsButton.disabled=false;
    };
    box.append(ewsButton,ewsArea);

@@ -28,3 +28,12 @@ Deteksi (tanpa aksi otomatis ke siswa) → guru meninjau → catat langkah penda
 5. Pengujian browser autentikasi asli dengan data fiktif, baru kemudian merge.
 
 Saat ini belum ada EWS production rule yang diaktifkan. Rule `grade_below_threshold_demo` di Supabase development tetap berstatus draft.
+
+## Implemented G0.6 MVP (development)
+- Read-only academic and published attendance previews for teacher/principal, no guardian/foundation visibility.
+- Principal-only activation of versioned academic and attendance rules. On-demand scan uses unique alert keys per student, rule version, date to avoid duplicates.
+- Teacher/principal-scoped alert inbox and notes-based follow-up workflow: open → under_review → resolved/dismissed, reopening with reason. Every transition creates an ews_followups audit entry.
+- No automatic dispatch to parents; threshold presets 70%, 2 assessments, or 3 absences in 30 days are **demo values**, not official education standards.
+- Current scan requires principal clicking Run; scheduled unattended scanning is outside this MVP and must not be implied.
+- Automated tests cover missing data, permissions, low-score creation, duplicate scan, notes, and status replay; Playwright uses mocked Auth; real browser with school accounts remains an after-deploy smoke test.
+- Existing G0.5.1 data/snapshots are not mutated by detection. No real-student data intended in this environment.

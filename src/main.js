@@ -56,7 +56,7 @@ async function loadContext(){
 function logoutButton(box){const b=el('button','Keluar','secondary');b.onclick=async()=>{await supabase.auth.signOut();currentContext=null;activeMembership=null;showLogin();};box.append(b);}
 function showMembershipPicker(user,units){const box=panel('Pilih unit sekolah','Anda memiliki lebih dari satu penugasan. Pilih konteks kerja.');box.append(el('p',user.email,'muted'));
  for(const unit of units){const btn=el('button',`${unit.tenant_name} · ${unit.school_name||'Yayasan'} · ${unit.role}`,'unit');btn.onclick=()=>{activeMembership=unit;showHome(user,unit);};box.append(btn);} logoutButton(box);}
-function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan penugasan Anda telah diverifikasi.');box.append(el('p',user.email,'muted'));box.append(el('div',unit.tenant_name,'highlight'));box.append(el('p',`Unit: ${unit.school_name||'Tingkat yayasan'}`));box.append(el('p',`Peran: ${unit.role}`));box.append(el('p','Nilai tersedia sesuai penugasan. Orang tua hanya melihat nilai yang sudah diterbitkan.','notice'));
+function showHome(user,unit){const box=panel('Dashboard KabarKelas','Ruang kerja sekolah yang terhubung ke data sesuai penugasan.');box.classList.add('dashboard-card');box.append(el('p',user.email,'muted'));box.append(el('div',unit.tenant_name,'highlight'));box.append(el('p',`Unit: ${unit.school_name||'Tingkat yayasan'}`));box.append(el('p',`Peran: ${unit.role}`));box.append(el('p','Nilai tersedia sesuai penugasan. Orang tua hanya melihat nilai yang sudah diterbitkan.','notice'));
  if(unit.role==='teacher' && unit.school_id) {
    const studentsButton=el('button','Lihat siswa yang saya ajar','secondary');
    const studentsRegion=el('div',null,'student-results');
@@ -425,5 +425,50 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
    };
    box.append(ewsButton,ewsArea);
  }
- const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
+ const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);decorateDashboard(box,user,unit);}
+function decorateDashboard(box,user,unit){
+  const content=el('div',null,'dashboard-main');
+  const top=el('header',null,'dashboard-topbar');
+  const eyebrow=el('p','KABARKELAS / RUANG KERJA','eyebrow');
+  const title=el('h1',({teacher:'Dashboard Guru',principal:'Dashboard Kepala Sekolah',guardian:'Perkembangan Anak',foundation_admin:'Dashboard Yayasan'})[unit.role]||'Dashboard Sekolah');
+  const desc=el('p',unit.school_name||unit.tenant_name,'muted');
+  top.append(eyebrow,title,desc);
+  const welcome=el('div',null,'welcome-panel');
+  welcome.append(el('span','Selamat datang di KabarKelas','welcome-label'),el('strong',unit.tenant_name||'Yayasan'),' ',el('p','Pilih modul untuk bekerja dengan data sekolah sesuai hak akses Anda.','muted'));
+  const sections=el('div',null,'dashboard-sections');
+  const homeChildren=[...box.children];
+  const groups=[];
+  let current=null;
+  for(const node of homeChildren){
+    if(node.tagName==='BUTTON'){
+      current=el('section',null,'dashboard-module');
+      const heading=el('h2',node.textContent,'module-title');
+      current.append(heading,node);groups.push(current);
+    }else if(node.classList?.contains('student-results')||node.classList?.contains('grade-results')){
+      if(current)current.append(node);else sections.append(node);
+    }else if(node.tagName==='H1'||node.classList?.contains('brand')||node.classList?.contains('notice')){
+      // Layout title and branding move to the permanent shell.
+    }else{
+      if(!current){welcome.append(node);}else current.append(node);
+    }
+  }
+  const nav=el('nav',null,'dashboard-nav');
+  nav.setAttribute('aria-label','Navigasi ruang kerja');
+  const brand=el('div','📚 KabarKelas','dashboard-brand');
+  const role=el('p',({teacher:'Guru',principal:'Kepala sekolah',guardian:'Orang tua',foundation_admin:'Yayasan'})[unit.role]||unit.role,'role-label');
+  nav.append(brand,role,el('p','MENU UTAMA','nav-label'));
+  const mainLink=el('button','Ringkasan','nav-item');mainLink.type='button';
+  mainLink.onclick=()=>top.scrollIntoView({behavior:'smooth',block:'start'});nav.append(mainLink);
+  for(let i=0;i<groups.length;i++){
+    const group=groups[i];
+    group.id='module-'+i;
+    const name=group.querySelector('.module-title')?.textContent||'Modul';
+    const item=el('button',name,'nav-item');item.type='button';
+    item.onclick=()=>group.scrollIntoView({behavior:'smooth',block:'start'});
+    nav.append(item);sections.append(group);
+  }
+  content.append(top,welcome,sections);
+  box.replaceChildren(nav,content);
+  box.setAttribute('aria-label','Dashboard KabarKelas');
+}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

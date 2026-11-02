@@ -59,7 +59,7 @@ test('orang tua hanya melihat nilai harian yang dirilis',async({page})=>{
 test('kepala sekolah dapat memilih kebijakan remedial terbaru dengan konfirmasi',async({page})=>{
  const {calls}=await setup(page,'principal');
  await page.getByRole('button',{name:'Atur kebijakan remedial & rilis nilai'}).click();
- await page.locator('select').first().selectOption('latest_score');
+ await page.locator('select:has(option[value="latest_score"])').selectOption('latest_score');
  page.on('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Simpan versi kebijakan baru'}).click();
  await expect(page.getByText(/Kebijakan versi 1 tersimpan/)).toBeVisible();

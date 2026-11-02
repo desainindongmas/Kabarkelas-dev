@@ -331,5 +331,27 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
    };
    box.append(policyButton,policyArea);
  }
+ if((unit.role==='teacher'||unit.role==='principal') && unit.school_id){
+   const ewsButton=el('button','Pratinjau pendampingan siswa (EWS)','secondary');
+   const ewsArea=el('div',null,'grade-results');
+   ewsButton.onclick=async()=>{
+     ewsButton.disabled=true;
+     const {data,error}=await supabase.rpc('kabarkelas_ews_academic_preview',{
+       p_school:unit.school_id,p_threshold:70,p_min_assessments:2
+     });
+     ewsArea.replaceChildren(el('h2','Indikator akademik — untuk tinjauan guru'));
+     if(error)ewsArea.append(el('p','Indikator tidak tersedia untuk akun ini.','error'));
+     else if(!data?.length)ewsArea.append(el('p','Belum ada siswa dengan minimal dua penilaian final.','muted'));
+     else for(const entry of data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',entry.student_name),el('p','Rata-rata '+entry.average_percent+'% dari '+entry.assessment_count+' penilaian final','muted'));
+       line.append(el('p',entry.requires_review?'Perlu ditinjau oleh guru — bukan label siswa':'Belum ada sinyal akademik berdasarkan aturan simulasi','muted'));
+       ewsArea.append(line);
+     }
+     ewsArea.append(el('p','Aturan 70% adalah simulasi; absensi dan tindak lanjut belum diaktifkan. Data ini tidak dibagikan ke orang tua.','muted'));
+     ewsButton.disabled=false;
+   };
+   box.append(ewsButton,ewsArea);
+ }
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

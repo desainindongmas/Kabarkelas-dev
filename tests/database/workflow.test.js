@@ -206,6 +206,29 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('ROLLBACK TO SAVEPOINT other_school');
       } finally {await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.6 attendance preview respects staff scope and missing data',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fixtures);
+        const asUser=async n=>{
+          await client.query('RESET ROLE');
+          await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);
+          await client.query('SET LOCAL ROLE authenticated');
+        };
+        await asUser(1);
+        const empty=await client.query("SELECT * FROM public.kabarkelas_ews_attendance_preview($1,'2026-01-01','2026-03-01',3)",[id(201)]);
+        assert.equal(empty.rows.length,0);
+        await asUser(3);
+        await client.query('SAVEPOINT guardian_denied');
+        await assert.rejects(client.query("SELECT * FROM public.kabarkelas_ews_attendance_preview($1,'2026-01-01','2026-03-01',3)",[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT guardian_denied');
+        await asUser(5);
+        await client.query('SAVEPOINT cross_school_denied');
+        await assert.rejects(client.query("SELECT * FROM public.kabarkelas_ews_attendance_preview($1,'2026-01-01','2026-03-01',3)",[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT cross_school_denied');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

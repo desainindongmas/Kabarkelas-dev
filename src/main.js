@@ -466,12 +466,62 @@ function decorateDashboard(box,user,unit){
     const item=el('a',name,'nav-item');item.href='#'+group.id;
     nav.append(item);sections.append(group);
   }
-  content.append(top,welcome,buildLiveOverview(unit),sections);
+  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='guardian' && unit.school_id)content.append(buildGuardianAcademicTrends(unit));content.append(sections);
   box.replaceChildren(nav,content);
   box.setAttribute('aria-label','Dashboard KabarKelas');
 }
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();
 
+function buildGuardianAcademicTrends(unit){
+ const section=el('section',null,'guardian-trends');
+ section.setAttribute('aria-label','Grafik perkembangan akademik');
+ section.append(el('h2','Perkembangan akademik'));
+ const info=el('p','Hanya nilai yang telah dirilis untuk anak terverifikasi. Setiap titik mewakili satu penilaian.','muted');
+ const status=el('p','Tekan Muat grafik untuk menampilkan perkembangan.','muted');
+ const button=el('button','Muat grafik akademik','secondary');
+ const result=el('div',null,'academic-chart-results');
+ section.append(info,button,status,result);
+ button.onclick=async()=>{
+  button.disabled=true;result.replaceChildren();status.textContent='Memuat nilai yang diterbitkan...';
+  try{
+   const {data,error}=await supabase.rpc('kabarkelas_guardian_academic_trends',{p_school:unit.school_id});
+   if(error||!Array.isArray(data))throw new Error('Data unavailable');
+   if(!data.length){status.textContent='Belum tersedia penilaian yang telah dirilis untuk anak Anda.';return;}
+   const groups=new Map();
+   for(const item of data){
+    const pct=Number(item.score_percent);
+    if(!Number.isFinite(pct)||pct<0||pct>100)continue;
+    const key=String(item.student_id)+'|'+String(item.subject_name);
+    if(!groups.has(key))groups.set(key,{name:item.student_name,subject:item.subject_name,points:[]});
+    groups.get(key).points.push({...item,pct});
+   }
+   if(!groups.size){status.textContent='Belum tersedia nilai terverifikasi untuk grafik.';return;}
+   status.textContent='Data perkembangan diambil dari penilaian yang sudah dirilis.';
+   for(const group of groups.values()){
+    const card=el('div',null,'trend-card');
+    card.append(el('h3',group.name+' · '+group.subject));
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 600 170');svg.setAttribute('role','img');
+    svg.setAttribute('aria-label','Grafik perkembangan '+group.name+' mata pelajaran '+group.subject);
+    const make=(tag,attrs)=>{const node=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
+    for(const tick of [0,50,100]){
+      const y=145-tick*1.15;
+      svg.append(make('line',{x1:28,y1:y,x2:570,y2:y,stroke:'#deebe8','stroke-width':1}));
+      const label=make('text',{x:0,y:y+4,fill:'#638083','font-size':12});label.textContent=String(tick);svg.append(label);
+    }
+    const points=group.points.map((p,i)=>({x:group.points.length===1?300:36+i*(520/(group.points.length-1)),y:145-p.pct*1.15,p}));
+    if(points.length>1)svg.append(make('polyline',{points:points.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:'#147f75','stroke-width':3,'stroke-linejoin':'round','stroke-linecap':'round'}));
+    for(const pt of points)svg.append(make('circle',{cx:pt.x,cy:pt.y,r:5,fill:'#147f75'}));
+    card.append(svg);
+    const list=el('ul',null,'trend-values');
+    for(const pt of points){const li=el('li',pt.p.assessment_title+' — '+pt.p.pct.toLocaleString('id-ID')+'%');list.append(li);}
+    card.append(list);result.append(card);
+   }
+  }catch{status.textContent='Grafik belum dapat dimuat. Tidak ada nilai perkiraan yang ditampilkan.';}
+  finally{button.disabled=false;}
+ };
+ return section;
+}
 function buildLiveOverview(unit){
   const section=el('section',null,'live-overview');
   section.setAttribute('aria-label','Ringkasan data sekolah');

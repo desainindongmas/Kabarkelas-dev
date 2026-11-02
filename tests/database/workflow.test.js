@@ -317,6 +317,23 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         assert.equal(alerts.rows[0].student_name,'Siswa Simulasi G05 1');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.7 security regression: browser roles cannot read private tables',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        for(const role of ['anon','authenticated']){
+          await client.query('RESET ROLE');await client.query('SET LOCAL ROLE '+role);
+          for(const table of ['student_grades','assessment_attempts','assessment_corrections','assessment_releases','school_report_snapshots','ews_alerts','ews_followups']){
+            await client.query('SAVEPOINT deny_select');
+            await assert.rejects(client.query('SELECT * FROM public.'+table+' LIMIT 1'),e=>e.code==='42501',role+' should not SELECT '+table);
+            await client.query('ROLLBACK TO SAVEPOINT deny_select');
+          }
+        }
+        await client.query('RESET ROLE');
+        const grants=await client.query("SELECT count(*)::integer n FROM information_schema.role_table_grants WHERE table_schema='public' AND grantee IN ('anon','authenticated')");
+        assert.equal(grants.rows[0].n,0);
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

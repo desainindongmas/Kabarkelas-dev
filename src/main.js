@@ -466,7 +466,7 @@ function decorateDashboard(box,user,unit){
     const item=el('a',name,'nav-item');item.href='#'+group.id;
     nav.append(item);sections.append(group);
   }
-  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='principal' && unit.school_id)content.append(buildPrincipalRubricManager(unit));if(unit.role==='teacher' && unit.school_id)content.append(buildTeacherDevelopment(unit));if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}content.append(sections);
+  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='principal' && unit.school_id)content.append(buildPrincipalRubricManager(unit));if(unit.role==='teacher' && unit.school_id){content.append(buildTeacherDevelopment(unit));content.append(buildTeacherObservationReview(unit));}if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}content.append(sections);
   box.replaceChildren(nav,content);
   box.setAttribute('aria-label','Dashboard KabarKelas');
 }
@@ -582,6 +582,43 @@ function buildPrincipalRubricManager(unit){
    message(section,error?'Persetujuan ditolak.':'Indikator disetujui dan dapat dipakai guru.',!!error);save.disabled=false;
  };
  section.append(form);return section;
+}
+function buildTeacherObservationReview(unit){
+ const wrap=el('section',null,'guardian-trends');wrap.setAttribute('aria-label','Koreksi dan pencabutan observasi');
+ wrap.append(el('h2','Tinjau observasi terdahulu'),el('p','Koreksi dan pencabutan membutuhkan alasan minimal 8 karakter. Semua perubahan tercatat pada audit.','muted'));
+ const load=el('button','Muat observasi saya','secondary');const area=el('div');wrap.append(load,area);
+ load.onclick=async()=>{
+  load.disabled=true;area.replaceChildren(el('p','Memuat observasi...','muted'));
+  try{
+   const {data,error}=await supabase.rpc('kabarkelas_teacher_observations',{p_school:unit.school_id});
+   if(error||!Array.isArray(data))throw new Error('Unavailable');
+   area.replaceChildren();
+   if(!data.length){area.append(el('p','Belum ada observasi yang dapat dikelola.','muted'));return;}
+   for(const obs of data){
+    const card=el('div',null,'student-row');
+    card.append(el('strong',obs.student_name+' · '+obs.indicator_label),el('p','Status: '+obs.state+' · Versi '+obs.revision+' · Skor '+obs.score+'/4','muted'));
+    if(obs.state==='withdrawn'){area.append(card);continue;}
+    const score=el('select');score.setAttribute('aria-label','Skor koreksi '+obs.indicator_label);
+    for(let n=1;n<=4;n++){const o=el('option','Skor '+n);o.value=String(n);score.append(o);}score.value=String(obs.score);
+    const evidence=el('textarea');evidence.value=obs.evidence;evidence.setAttribute('aria-label','Bukti koreksi '+obs.indicator_label);
+    const reason=el('textarea');reason.placeholder='Alasan koreksi atau pencabutan (minimal 8 karakter)';reason.minLength=8;
+    const actions=el('div',null,'observation-actions');
+    for(const [action,label] of [['correct','Simpan koreksi'],['withdraw','Cabut observasi']]){
+      const b=el('button',label,'secondary');b.type='button';
+      b.onclick=async()=>{
+        if(reason.value.trim().length<8){message(card,'Alasan minimal 8 karakter.',true);return;}
+        b.disabled=true;
+        const {error}=await supabase.rpc('kabarkelas_update_development_observation',{p_observation:obs.observation_id,p_revision:obs.revision,p_action:action,p_score:Number(score.value),p_evidence:evidence.value.trim(),p_reason:reason.value.trim()});
+        if(error){message(card,'Perubahan ditolak atau versi sudah berubah. Muat observasi kembali.',true);b.disabled=false;return;}
+        await load.onclick();
+      };actions.append(b);
+    }
+    card.append(score,evidence,reason,actions);area.append(card);
+   }
+  }catch{area.replaceChildren(el('p','Observasi belum dapat dimuat.','error'));}
+  finally{load.disabled=false;}
+ };
+ return wrap;
 }
 function buildTeacherDevelopment(unit){
  const wrap=el('section',null,'guardian-trends');wrap.setAttribute('aria-label','Observasi kompetensi dan karakter guru');

@@ -405,6 +405,39 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('ROLLBACK TO SAVEPOINT guardian');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.8.5 audit correction withdrawal and stale revision',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_approve_development_indicator($1,'character','CHAR-01','Kemandirian')",[id(201)]);
+        await asUser(1);
+        const opts=await client.query('SELECT * FROM public.kabarkelas_teacher_development_options($1)',[id(201)]);
+        const student=opts.rows[0];
+        const ins=await client.query("SELECT public.kabarkelas_teacher_development_observe($1,$2,$3,'character','CHAR-01','Kemandirian',3,'Observasi lengkap awal',true) AS obs",[id(201),student.student_id,student.class_id]);
+        const obs=ins.rows[0].obs;
+        const changed=await client.query("SELECT public.kabarkelas_update_development_observation($1,1,'correct',4,'Bukti telah dikonfirmasi','Koreksi verifikasi bukti') AS revision",[obs]);
+        assert.equal(changed.rows[0].revision,2);
+        await client.query('SAVEPOINT stale');
+        await assert.rejects(client.query("SELECT public.kabarkelas_update_development_observation($1,1,'withdraw',4,'Bukti telah dikonfirmasi','Penarikan keliru')",[obs]),e=>e.code==='40001');
+        await client.query('ROLLBACK TO SAVEPOINT stale');
+        await asUser(3);
+        const visible=await client.query('SELECT * FROM public.kabarkelas_guardian_development_radar($1)',[id(201)]);
+        assert.ok(visible.rows.some(r=>r.indicator_code==='CHAR-01'));
+        await asUser(1);
+        await client.query("SELECT public.kabarkelas_update_development_observation($1,2,'withdraw',4,'Bukti telah dikonfirmasi','Penarikan setelah review')",[obs]);
+        const log=await client.query('RESET ROLE').then(()=>client.query('SELECT action,previous_revision,new_revision FROM public.development_observation_audit WHERE observation_id=$1 ORDER BY new_revision',[obs]));
+        assert.deepEqual(log.rows.map(r=>r.action),['correct','withdraw']);
+        assert.deepEqual(log.rows.map(r=>r.new_revision),[2,3]);
+        await asUser(3);
+        const hidden=await client.query('SELECT * FROM public.kabarkelas_guardian_development_radar($1)',[id(201)]);
+        assert.equal(hidden.rows.length,0);
+        await client.query('SAVEPOINT denied');
+        await assert.rejects(client.query("SELECT public.kabarkelas_update_development_observation($1,3,'correct',2,'Data lain lengkap','Tidak boleh mengubah')",[obs]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT denied');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

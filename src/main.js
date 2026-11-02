@@ -466,7 +466,7 @@ function decorateDashboard(box,user,unit){
     const item=el('a',name,'nav-item');item.href='#'+group.id;
     nav.append(item);sections.append(group);
   }
-  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='guardian' && unit.school_id)content.append(buildGuardianAcademicTrends(unit));content.append(sections);
+  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='teacher' && unit.school_id)content.append(buildTeacherDevelopment(unit));if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}content.append(sections);
   box.replaceChildren(nav,content);
   box.setAttribute('aria-label','Dashboard KabarKelas');
 }
@@ -564,4 +564,81 @@ function buildLiveOverview(unit){
   };
   button.onclick=load;
   return section;
+}
+
+function buildTeacherDevelopment(unit){
+ const wrap=el('section',null,'guardian-trends');wrap.setAttribute('aria-label','Observasi kompetensi dan karakter guru');
+ wrap.append(el('h2','Observasi kompetensi & karakter'),el('p','Skala 1–4 berdasarkan bukti pengamatan. Data draf tidak dapat dilihat orang tua.','muted'));
+ const load=el('button','Pilih siswa untuk observasi','secondary');const area=el('div');wrap.append(load,area);
+ load.onclick=async()=>{
+  load.disabled=true;area.replaceChildren(el('p','Memuat pilihan siswa...','muted'));
+  try{
+   const {data,error}=await supabase.rpc('kabarkelas_teacher_development_options',{p_school:unit.school_id});
+   if(error||!Array.isArray(data))throw new Error('Options unavailable');
+   area.replaceChildren();
+   if(!data.length){area.append(el('p','Belum ada kelas dan siswa dalam penugasan aktif.','muted'));return;}
+   const form=el('form');const student=el('select');student.setAttribute('aria-label','Siswa dan kelas');
+   for(const record of data){const opt=el('option',record.student_name+' — '+record.class_name);opt.value=String(data.indexOf(record));student.append(opt);}
+   const domain=el('select');domain.setAttribute('aria-label','Domain observasi');
+   for(const [key,label] of [['academic_competency','Kompetensi akademik'],['character','Karakter']]){const opt=el('option',label);opt.value=key;domain.append(opt);}
+   const code=el('input');code.placeholder='Kode indikator (mis. KOM-01)';code.required=true;code.maxLength=50;
+   const label=el('input');label.placeholder='Nama indikator yang diamati';label.required=true;label.maxLength=120;
+   const score=el('select');score.setAttribute('aria-label','Tingkat perkembangan');
+   for(let i=1;i<=4;i++){const opt=el('option','Tingkat '+i);opt.value=String(i);score.append(opt);}
+   const evidence=el('textarea');evidence.placeholder='Bukti pengamatan (minimal 8 karakter)';evidence.required=true;evidence.minLength=8;evidence.maxLength=1000;
+   const publish=el('input');publish.type='checkbox';publish.style.width='auto';publish.setAttribute('aria-label','Terbitkan ke orang tua');
+   const publishLabel=el('label','Terbitkan kepada orang tua setelah diperiksa');publishLabel.prepend(publish);
+   const submit=el('button','Simpan observasi');submit.type='submit';
+   form.append(student,domain,code,label,score,evidence,publishLabel,submit);
+   form.onsubmit=async(event)=>{
+    event.preventDefault();const record=data[Number(student.value)];if(!record)return;
+    submit.disabled=true;
+    const {error}=await supabase.rpc('kabarkelas_teacher_development_observe',{p_school:unit.school_id,p_student:record.student_id,p_class:record.class_id,p_domain:domain.value,p_code:code.value.trim(),p_label:label.value.trim(),p_score:Number(score.value),p_evidence:evidence.value.trim(),p_publish:publish.checked});
+    message(area,error?'Observasi ditolak. Periksa penugasan dan nilai.':publish.checked?'Observasi berhasil diterbitkan.':'Observasi berhasil disimpan sebagai draf.',!!error);
+    submit.disabled=false;if(!error){evidence.value='';publish.checked=false;}
+   };
+   area.append(form);
+  }catch{area.replaceChildren(el('p','Pilihan siswa tidak dapat dimuat.','error'));}
+  finally{load.disabled=false;}
+ };
+ return wrap;
+}
+function buildGuardianRadar(unit){
+ const wrap=el('section',null,'guardian-trends');wrap.setAttribute('aria-label','Grafik jaring perkembangan');
+ wrap.append(el('h2','Jaring kompetensi & karakter'),el('p','Hanya observasi terbit dari guru. Skala 1–4; grafik merupakan rata-rata pengamatan, bukan diagnosis.','muted'));
+ const button=el('button','Muat jaring perkembangan','secondary');const area=el('div',null,'academic-chart-results');
+ wrap.append(button,area);
+ button.onclick=async()=>{
+  button.disabled=true;area.replaceChildren(el('p','Memuat observasi terbit...','muted'));
+  try{
+   const {data,error}=await supabase.rpc('kabarkelas_guardian_development_radar',{p_school:unit.school_id});
+   if(error||!Array.isArray(data))throw new Error('Unavailable');
+   area.replaceChildren();
+   if(!data.length){area.append(el('p','Belum ada observasi kompetensi atau karakter yang diterbitkan.','muted'));return;}
+   const groups=new Map();
+   for(const item of data){const val=Number(item.average_score);
+    if(!Number.isFinite(val)||val<1||val>4)continue;
+    const key=item.student_name+' · '+item.domain;
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push({...item,val});
+   }
+   if(!groups.size){area.append(el('p','Belum ada indikator valid untuk grafik.','muted'));return;}
+   for(const [name,items] of groups){
+    const card=el('div',null,'trend-card');card.append(el('h3',name.replace('academic_competency','Kompetensi akademik').replace('character','Karakter')));
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 360 320');svg.setAttribute('role','img');svg.setAttribute('aria-label','Grafik radar '+name);
+    const make=(tag,attrs)=>{const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,String(v));return n;};
+    const n=items.length,loc=(i,r)=>[180+Math.sin(2*Math.PI*i/n)*r,145-Math.cos(2*Math.PI*i/n)*r],points=r=>items.map((_,i)=>loc(i,r).join(',')).join(' ');
+    if(n>=3){for(let r=25;r<=100;r+=25)svg.append(make('polygon',{points:points(r),fill:'none',stroke:'#d4e8e3','stroke-width':1}));}
+    else{for(let r=25;r<=100;r+=25)svg.append(make('circle',{cx:180,cy:145,r,fill:'none',stroke:'#d4e8e3'}));}
+    for(let i=0;i<n;i++){const [x,y]=loc(i,100);svg.append(make('line',{x1:180,y1:145,x2:x,y2:y,stroke:'#d4e8e3'}));}
+    if(n>=3)svg.append(make('polygon',{points:items.map((item,i)=>loc(i,item.val*25).join(',')).join(' '),fill:'#17897a44',stroke:'#168779','stroke-width':3}));
+    else for(let i=0;i<n;i++){const [x,y]=loc(i,items[i].val*25);svg.append(make('circle',{cx:x,cy:y,r:6,fill:'#168779'}));}
+    card.append(svg);
+    const list=el('ul',null,'trend-values');for(const item of items)list.append(el('li',item.indicator_label+' — '+item.val.toLocaleString('id-ID')+'/4 ('+item.observation_count+' observasi)'));
+    card.append(list);area.append(card);
+   }
+  }catch{area.replaceChildren(el('p','Grafik tidak dapat dimuat; tidak ada skor perkiraan yang ditampilkan.','error'));}
+  finally{button.disabled=false;}
+ };
+ return wrap;
 }

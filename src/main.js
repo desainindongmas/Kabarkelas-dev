@@ -478,7 +478,7 @@ function buildLiveOverview(unit){
   section.append(el('h2','Ringkasan dari data sekolah'));
   const intro=el('p','Statistik dihitung dari data yang dapat diakses oleh peran Anda. Angka kosong bukan data simulasi.','muted');
   const grid=el('div',null,'live-overview-grid');
-  const state=el('p','Menyiapkan ringkasan...','muted');
+  const state=el('p','Pilih Perbarui ringkasan untuk mengambil data terbaru.','muted');
   section.append(intro,grid,state);
   const button=el('button','Perbarui ringkasan','secondary');button.type='button';
   section.append(button);
@@ -513,6 +513,5 @@ function buildLiveOverview(unit){
     }finally{if(version===generation)button.disabled=false;}
   };
   button.onclick=load;
-  void load();
   return section;
 }

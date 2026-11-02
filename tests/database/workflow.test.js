@@ -294,6 +294,29 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         assert.deepEqual(rows.rows.map(x=>x.new_status),['under_review','resolved']);
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.6 finds low averages, creates one alert per scan day, and never duplicates',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        await client.query("INSERT INTO public.assessments(id,tenant_id,school_id,class_id,subject_id,period_id,title,max_score,created_by) SELECT $1,tenant_id,school_id,class_id,subject_id,period_id,'Penilaian kedua',100,created_by FROM public.assessments WHERE id=$2",[id(704),id(701)]);
+        await client.query("INSERT INTO public.student_grades(id,tenant_id,school_id,assessment_id,student_id,score) SELECT $1,tenant_id,school_id,$2,student_id,60 FROM public.student_grades WHERE id=$3",[id(804),id(704),id(801)]);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'initial',60,'Nilai awal')",[id(801)]);
+        await client.query('SELECT public.kabarkelas_finalize_assessment($1)',[id(801)]);
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'initial',60,'Nilai awal')",[id(804)]);
+        await client.query('SELECT public.kabarkelas_finalize_assessment($1)',[id(804)]);
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb)",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]);
+        const first=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        const next=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        assert.equal(first.rows[0].data.created,1);
+        assert.equal(next.rows[0].data.created,0);
+        const alerts=await client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]);
+        assert.equal(alerts.rows.length,1);
+        assert.equal(alerts.rows[0].student_name,'Siswa Simulasi G05 1');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

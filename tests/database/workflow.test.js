@@ -357,6 +357,8 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
       try{
         await client.query('BEGIN');await client.query(fixtures);
         const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_approve_development_indicator($1,'character','CHAR-01','Kemandirian')",[id(201)]);
         await asUser(1);
         const opts=await client.query('SELECT * FROM public.kabarkelas_teacher_development_options($1)',[id(201)]);
         assert.ok(opts.rows.length>0);
@@ -374,6 +376,33 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('SAVEPOINT denied');
         await assert.rejects(client.query('SELECT * FROM public.kabarkelas_guardian_development_radar($1)',[id(201)]),e=>e.code==='42501');
         await client.query('ROLLBACK TO SAVEPOINT denied');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
+    await t.test('G0.8.4 only principal approves rubrics and teachers use approved indicators',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        const opts=await client.query('SELECT * FROM public.kabarkelas_teacher_development_options($1)',[id(201)]);
+        const student=opts.rows[0];
+        await client.query('SAVEPOINT unapproved');
+        await assert.rejects(client.query("SELECT public.kabarkelas_teacher_development_observe($1,$2,$3,'character','CHAR-01','Kemandirian',3,'Bukti kemandirian kuat',false)",[id(201),student.student_id,student.class_id]),e=>e.code==='22023');
+        await client.query('ROLLBACK TO SAVEPOINT unapproved');
+        await client.query('SAVEPOINT teacher');
+        await assert.rejects(client.query("SELECT public.kabarkelas_approve_development_indicator($1,'character','CHAR-01','Kemandirian')",[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT teacher');
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_approve_development_indicator($1,'character','CHAR-01','Kemandirian')",[id(201)]);
+        await asUser(1);
+        const indicators=await client.query('SELECT * FROM public.kabarkelas_development_indicators($1)',[id(201)]);
+        assert.equal(indicators.rows.length,1);
+        const created=await client.query("SELECT public.kabarkelas_teacher_development_observe($1,$2,$3,'character','CHAR-01','Kemandirian',3,'Bukti kemandirian kuat',true)",[id(201),student.student_id,student.class_id]);
+        assert.ok(created.rows[0]);
+        await asUser(3);
+        await client.query('SAVEPOINT guardian');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_development_indicators($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT guardian');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
     // Separate connections prove row locking, not just sequential JS behavior.

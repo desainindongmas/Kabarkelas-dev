@@ -331,5 +331,99 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
    };
    box.append(policyButton,policyArea);
  }
+ if((unit.role==='teacher'||unit.role==='principal') && unit.school_id){
+   const ewsButton=el('button','Pratinjau pendampingan siswa (EWS)','secondary');
+   const ewsArea=el('div',null,'grade-results');
+   ewsButton.onclick=async()=>{
+     ewsButton.disabled=true;
+     const {data,error}=await supabase.rpc('kabarkelas_ews_academic_preview',{
+       p_school:unit.school_id,p_threshold:70,p_min_assessments:2
+     });
+     ewsArea.replaceChildren(el('h2','Indikator akademik — untuk tinjauan guru'));
+     if(error)ewsArea.append(el('p','Indikator tidak tersedia untuk akun ini.','error'));
+     else if(!data?.length)ewsArea.append(el('p','Belum ada siswa dengan minimal dua penilaian final.','muted'));
+     else for(const entry of data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',entry.student_name),el('p','Rata-rata '+entry.average_percent+'% dari '+entry.assessment_count+' penilaian final','muted'));
+       line.append(el('p',entry.requires_review?'Perlu ditinjau oleh guru — bukan label siswa':'Belum ada sinyal akademik berdasarkan aturan simulasi','muted'));
+       ewsArea.append(line);
+     }
+     const today=new Date();
+     const end=today.toISOString().slice(0,10);
+     const start=new Date(today.getTime()-29*86400000).toISOString().slice(0,10);
+     const attendance=await supabase.rpc('kabarkelas_ews_attendance_preview',{
+       p_school:unit.school_id,p_start:start,p_end:end,p_absent_threshold:3
+     });
+     ewsArea.append(el('h3','Kehadiran — 30 hari terakhir'));
+     if(attendance.error) ewsArea.append(el('p','Data kehadiran belum bisa dimuat.','muted'));
+     else if(!attendance.data?.length) ewsArea.append(el('p','Belum ada sesi absensi yang diterbitkan pada periode ini.','muted'));
+     else for(const record of attendance.data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',record.student_name),el('p',record.unexcused_absences+' tanpa keterangan dari '+record.session_count+' sesi','muted'));
+       if(record.requires_review)line.append(el('p','Perlu peninjauan oleh guru','muted'));
+       ewsArea.append(line);
+     }
+     ewsArea.append(el('p','Ambang 70% dan 3 ketidakhadiran tanpa keterangan adalah aturan simulasi; tindak lanjut belum diaktifkan. Data tidak dibagikan ke orang tua.','muted'));
+     if(unit.role==='principal'){
+       const tools=el('div',null,'student-row');
+       tools.append(el('h3','Aturan deteksi sekolah'));
+       const configure=el('button','Aktifkan aturan akademik (70%, minimal 2 nilai)','secondary');
+       configure.onclick=async()=>{
+         configure.disabled=true;
+         const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
+           p_school:unit.school_id,p_key:'academic_low_average',
+           p_parameters:{threshold_percent:70,minimum_assessments:2}
+         });
+         message(tools,error?'Pengaturan aturan ditolak.':'Aturan akademik berhasil diaktifkan.',!!error);
+         configure.disabled=false;
+       };
+       const attendance=el('button','Aktifkan aturan absensi (3 kali / 30 hari)','secondary');
+       attendance.onclick=async()=>{
+         attendance.disabled=true;
+         const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
+           p_school:unit.school_id,p_key:'attendance_unexcused',
+           p_parameters:{absent_threshold:3,lookback_days:30}
+         });
+         message(tools,error?'Pengaturan aturan ditolak.':'Aturan absensi berhasil diaktifkan.',!!error);
+         attendance.disabled=false;
+       };
+       const scan=el('button','Jalankan deteksi hari ini','secondary');
+       scan.onclick=async()=>{
+         scan.disabled=true;
+         const {data,error}=await supabase.rpc('kabarkelas_ews_scan_school',{p_school:unit.school_id});
+         if(error){message(tools,'Deteksi gagal; periksa pengaturan sekolah.',true);scan.disabled=false;return;}
+         message(tools,(data.created||0)+' peringatan baru tercatat untuk ditinjau.');
+         ewsButton.click();
+       };
+       tools.append(configure,attendance,scan);ewsArea.append(tools);
+     }
+     const alerts=await supabase.rpc('kabarkelas_ews_my_alerts',{p_school:unit.school_id});
+     ewsArea.append(el('h3','Tindak lanjut peringatan'));
+     if(alerts.error) ewsArea.append(el('p','Daftar tindak lanjut belum bisa dimuat.','muted'));
+     else if(!alerts.data?.length) ewsArea.append(el('p','Belum ada peringatan yang diaktifkan sekolah.','muted'));
+     else for(const alert of alerts.data){
+       const line=el('div',null,'student-row');
+       line.append(el('strong',alert.student_name+' · '+alert.alert_status),el('p',alert.explanation,'muted'));
+       const note=el('input');note.placeholder='Catatan tindak lanjut (minimal 5 karakter)';
+       line.append(note);
+       const actions=alert.alert_status==='open'?['under_review','dismissed']:alert.alert_status==='under_review'?['resolved','dismissed']:['open'];
+       for(const action of actions){
+         const btn=el('button',({under_review:'Mulai tinjauan',resolved:'Selesaikan',dismissed:'Tutup tanpa tindakan',open:'Buka kembali'})[action],'secondary');
+         btn.type='button';
+         btn.onclick=async()=>{
+           if(note.value.trim().length<5){message(line,'Isi catatan minimal 5 karakter.',true);return;}
+           btn.disabled=true;
+           const {error}=await supabase.rpc('kabarkelas_ews_update_alert',{p_alert:alert.alert_id,p_expected_status:alert.alert_status,p_next_status:action,p_note:note.value.trim()});
+           if(error){message(line,'Perubahan ditolak atau status telah berubah. Muat ulang.',true);btn.disabled=false;return;}
+           ewsButton.click();
+         };
+         line.append(btn);
+       }
+       ewsArea.append(line);
+     }
+     ewsButton.disabled=false;
+   };
+   box.append(ewsButton,ewsArea);
+ }
  const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);}
 if(configured){supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){activeMembership=null;currentContext=null;showLogin();}});loadContext();}else showLogin();

@@ -183,6 +183,140 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.end();
       }
     });
+    await t.test('G0.6 academic preview is scoped to active school personnel',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fixtures);
+        const asUser=async n=>{
+          await client.query('RESET ROLE');
+          await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);
+          await client.query('SET LOCAL ROLE authenticated');
+        };
+        await asUser(1);
+        const empty=await client.query('SELECT * FROM public.kabarkelas_ews_academic_preview($1,70,2)',[id(201)]);
+        assert.equal(empty.rows.length,0,'Draft grades do not trigger warnings');
+        await asUser(3);
+        await client.query('SAVEPOINT denied');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_ews_academic_preview($1,70,2)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT denied');
+        await asUser(5);
+        await client.query('SAVEPOINT other_school');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_ews_academic_preview($1,70,2)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT other_school');
+      } finally {await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
+    await t.test('G0.6 attendance preview respects staff scope and missing data',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fixtures);
+        const asUser=async n=>{
+          await client.query('RESET ROLE');
+          await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);
+          await client.query('SET LOCAL ROLE authenticated');
+        };
+        await asUser(1);
+        const empty=await client.query("SELECT * FROM public.kabarkelas_ews_attendance_preview($1,'2026-01-01','2026-03-01',3)",[id(201)]);
+        assert.equal(empty.rows.length,0);
+        await asUser(3);
+        await client.query('SAVEPOINT guardian_denied');
+        await assert.rejects(client.query("SELECT * FROM public.kabarkelas_ews_attendance_preview($1,'2026-01-01','2026-03-01',3)",[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT guardian_denied');
+        await asUser(5);
+        await client.query('SAVEPOINT cross_school_denied');
+        await assert.rejects(client.query("SELECT * FROM public.kabarkelas_ews_attendance_preview($1,'2026-01-01','2026-03-01',3)",[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT cross_school_denied');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
+    await t.test('G0.6 alert inbox and update deny guardians and other-school users',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        const empty=await client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]);
+        assert.equal(empty.rows.length,0);
+        await client.query('SAVEPOINT missing');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_update_alert($1,'open','resolved','Tidak sah')",[id(810)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT missing');
+        await asUser(3);
+        await client.query('SAVEPOINT guardian');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT guardian');
+        await asUser(5);
+        await client.query('SAVEPOINT school');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT school');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
+    await t.test('G0.6 principals activate rules; scans are idempotent; guardians denied',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        await client.query('SAVEPOINT teacher');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb)",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT teacher');
+        await asUser(2);
+        const configured=await client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb) version",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]);
+        assert.equal(configured.rows[0].version,1);
+        const a=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        const b=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        assert.equal(a.rows[0].data.created,0);
+        assert.equal(b.rows[0].data.created,0);
+        await asUser(3);
+        await client.query('SAVEPOINT guardian');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02')",[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT guardian');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
+    await t.test('G0.6 review followup succeeds, audits, and refuses stale replay',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb)",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]);
+        await client.query('RESET ROLE');
+        const made=await client.query("INSERT INTO public.ews_alerts(tenant_id,school_id,student_id,rule_id,window_key,severity,explanation) SELECT r.tenant_id,r.school_id,$1,r.id,'2026-11-02','review','Contoh simulasi untuk ditinjau' FROM public.ews_rules r WHERE r.school_id=$2 AND r.rule_key='academic_low_average' RETURNING id",[id(401),id(201)]);
+        const alert=made.rows[0].id;
+        await asUser(1);
+        const changed=await client.query("SELECT public.kabarkelas_ews_update_alert($1,'open','under_review','Guru meninjau konteks') data",[alert]);
+        assert.equal(changed.rows[0].data.status,'under_review');
+        await client.query('SAVEPOINT stale');
+        await assert.rejects(client.query("SELECT public.kabarkelas_ews_update_alert($1,'open','dismissed','Pengulangan tidak valid')",[alert]),e=>e.code==='40001');
+        await client.query('ROLLBACK TO SAVEPOINT stale');
+        await client.query("SELECT public.kabarkelas_ews_update_alert($1,'under_review','resolved','Pendampingan telah dilaksanakan')",[alert]);
+        await client.query('RESET ROLE');
+        const rows=await client.query('SELECT previous_status,new_status,note FROM public.ews_followups WHERE alert_id=$1 ORDER BY occurred_at',[alert]);
+        assert.deepEqual(rows.rows.map(x=>x.new_status),['under_review','resolved']);
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
+    await t.test('G0.6 finds low averages, creates one alert per scan day, and never duplicates',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        await client.query("INSERT INTO public.assessments(id,tenant_id,school_id,class_id,subject_id,period_id,title,max_score,created_by) SELECT $1,tenant_id,school_id,class_id,subject_id,period_id,'Penilaian kedua',100,created_by FROM public.assessments WHERE id=$2",[id(704),id(701)]);
+        await client.query("INSERT INTO public.student_grades(id,tenant_id,school_id,assessment_id,student_id,score) SELECT $1,tenant_id,school_id,$2,student_id,60 FROM public.student_grades WHERE id=$3",[id(804),id(704),id(801)]);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'initial',60,'Nilai awal')",[id(801)]);
+        await client.query('SELECT public.kabarkelas_finalize_assessment($1)',[id(801)]);
+        await client.query("SELECT public.kabarkelas_record_attempt($1,'initial',60,'Nilai awal')",[id(804)]);
+        await client.query('SELECT public.kabarkelas_finalize_assessment($1)',[id(804)]);
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_ews_activate_rule($1,'academic_low_average',$2::jsonb)",[id(201),JSON.stringify({threshold_percent:70,minimum_assessments:2})]);
+        const first=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        const next=await client.query("SELECT public.kabarkelas_ews_scan_school($1,'2026-11-02') data",[id(201)]);
+        assert.equal(first.rows[0].data.created,1);
+        assert.equal(next.rows[0].data.created,0);
+        const alerts=await client.query('SELECT * FROM public.kabarkelas_ews_my_alerts($1)',[id(201)]);
+        assert.equal(alerts.rows.length,1);
+        assert.equal(alerts.rows[0].student_name,'Siswa Simulasi G05 1');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

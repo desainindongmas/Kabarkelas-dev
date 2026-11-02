@@ -364,6 +364,39 @@ function showHome(user,unit){const box=panel('Berhasil masuk','Identitas dan pen
        ewsArea.append(line);
      }
      ewsArea.append(el('p','Ambang 70% dan 3 ketidakhadiran tanpa keterangan adalah aturan simulasi; tindak lanjut belum diaktifkan. Data tidak dibagikan ke orang tua.','muted'));
+     if(unit.role==='principal'){
+       const tools=el('div',null,'student-row');
+       tools.append(el('h3','Aturan deteksi sekolah'));
+       const configure=el('button','Aktifkan aturan akademik (70%, minimal 2 nilai)','secondary');
+       configure.onclick=async()=>{
+         configure.disabled=true;
+         const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
+           p_school:unit.school_id,p_key:'academic_low_average',
+           p_parameters:{threshold_percent:70,minimum_assessments:2}
+         });
+         message(tools,error?'Pengaturan aturan ditolak.':'Aturan akademik berhasil diaktifkan.',!!error);
+         configure.disabled=false;
+       };
+       const attendance=el('button','Aktifkan aturan absensi (3 kali / 30 hari)','secondary');
+       attendance.onclick=async()=>{
+         attendance.disabled=true;
+         const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
+           p_school:unit.school_id,p_key:'attendance_unexcused',
+           p_parameters:{absent_threshold:3,lookback_days:30}
+         });
+         message(tools,error?'Pengaturan aturan ditolak.':'Aturan absensi berhasil diaktifkan.',!!error);
+         attendance.disabled=false;
+       };
+       const scan=el('button','Jalankan deteksi hari ini','secondary');
+       scan.onclick=async()=>{
+         scan.disabled=true;
+         const {data,error}=await supabase.rpc('kabarkelas_ews_scan_school',{p_school:unit.school_id});
+         if(error){message(tools,'Deteksi gagal; periksa pengaturan sekolah.',true);scan.disabled=false;return;}
+         message(tools,(data.created||0)+' peringatan baru tercatat untuk ditinjau.');
+         ewsButton.click();
+       };
+       tools.append(configure,attendance,scan);ewsArea.append(tools);
+     }
      const alerts=await supabase.rpc('kabarkelas_ews_my_alerts',{p_school:unit.school_id});
      ewsArea.append(el('h3','Tindak lanjut peringatan'));
      if(alerts.error) ewsArea.append(el('p','Daftar tindak lanjut belum bisa dimuat.','muted'));

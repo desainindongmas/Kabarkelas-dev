@@ -15,3 +15,34 @@ input,select,textarea{padding:12px 14px;border:1px solid #cad9d9;border-radius:1
 @media (min-width:800px){body:has(.card .student-row){align-items:flex-start}.card:has(.student-row){max-width:980px;width:min(100%,980px)}.card:has(.student-row) .student-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.card:has(.student-row) .student-row button{width:auto;flex:0 1 auto}}
 @media (max-width:600px){body{padding:12px;align-items:flex-start}.card{border-radius:16px;padding:20px}button{min-height:44px}input,select,textarea{font-size:16px}}
 @media (prefers-reduced-motion:reduce){button{transition:none}}
+
+/* G0.8 role-based responsive application shell */
+body:has(.dashboard-card){display:block;padding:0;background:#f4f7f8}
+.dashboard-card{display:grid;grid-template-columns:245px minmax(0,1fr);max-width:none;width:100%;min-height:100vh;padding:0;border:0;border-radius:0;box-shadow:none;background:#f4f7f8}
+.dashboard-nav{background:#fff;border-right:1px solid #e1e9e9;padding:30px 17px;display:flex;flex-direction:column;gap:8px;position:sticky;top:0;height:100vh;overflow:auto}
+.dashboard-brand{font-size:21px;color:#177970;font-weight:800;margin:0 10px 22px;letter-spacing:-.4px}
+.role-label{color:#527174;font-size:13px;background:#eaf5f2;border-radius:9px;padding:10px 12px;margin:0 6px 22px}
+.nav-label{font-size:11px;letter-spacing:1.5px;color:#8da0a4;margin:10px 12px 6px;font-weight:800}
+.dashboard-nav .nav-item{background:transparent;color:#526871;text-align:left;font-size:13px;font-weight:600;margin:0;width:100%;padding:12px;border-radius:9px;min-height:44px}
+.dashboard-nav .nav-item:hover,.dashboard-nav .nav-item:focus-visible{background:#e8f5f1;color:#116f66}
+.dashboard-main{padding:32px clamp(18px,4vw,56px) 80px;min-width:0;max-width:1420px;width:100%;margin:0 auto}
+.dashboard-topbar{padding-bottom:23px}.eyebrow{color:#178379;font-weight:800;font-size:11px;letter-spacing:1.6px;margin:0 0 9px}
+.dashboard-topbar h1{font-size:clamp(26px,3vw,37px);font-weight:800;color:#183849;margin:0 0 5px}
+.dashboard-topbar .muted{margin:0}
+.welcome-panel{background:linear-gradient(110deg,#0d7774,#228c87);color:white;padding:25px 28px;border-radius:18px;margin-bottom:24px;box-shadow:0 10px 25px #0e777420;display:flex;flex-direction:column;gap:8px}
+.welcome-label{font-size:13px;opacity:.9}.welcome-panel strong{font-size:24px}.welcome-panel .muted{color:#ddf3ed;margin:0}
+.dashboard-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:19px;align-items:start}
+.dashboard-module{background:#fff;border:1px solid #e0ebeb;border-radius:16px;padding:22px;box-shadow:0 5px 18px #173b4808;min-width:0;scroll-margin-top:20px}
+.dashboard-module:has(.grade-results),.dashboard-module:has(.student-results){grid-column:span 1}
+.dashboard-module .module-title{font-size:17px;color:#234453;font-weight:750;margin:0 0 13px}
+.dashboard-module>button{margin-top:0}
+.dashboard-module .student-row{display:block}
+.dashboard-module .grade-results,.dashboard-module .student-results{max-width:100%}
+.dashboard-module button{min-height:42px}
+@media(min-width:1500px){.dashboard-sections{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1050px){.dashboard-card{grid-template-columns:195px minmax(0,1fr)}.dashboard-sections{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){.dashboard-card{display:flex;flex-direction:column}.dashboard-nav{position:relative;top:auto;height:auto;max-height:175px;display:flex;flex-direction:row;align-items:center;overflow:auto;gap:6px;padding:11px 15px;border-right:0;border-bottom:1px solid #e0eaea}.dashboard-brand{font-size:16px;margin:0;flex:none}.role-label,.nav-label{display:none}.dashboard-nav .nav-item{white-space:nowrap;width:auto;flex:none;padding:10px;font-size:12px;min-height:42px}.dashboard-main{padding:22px 14px 54px}.welcome-panel{padding:20px}.welcome-panel strong{font-size:20px}.dashboard-module{padding:17px}}
+
+@media(min-width:800px){.card.dashboard-card:has(.student-row){max-width:none;width:100%}}
+
+.dashboard-nav a.nav-item{display:block;text-decoration:none;line-height:20px}.dashboard-nav a.nav-item:focus-visible{outline:3px solid #85c9c2;outline-offset:2px}

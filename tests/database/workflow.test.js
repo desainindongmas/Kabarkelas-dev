@@ -352,6 +352,30 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('ROLLBACK TO SAVEPOINT school');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('G0.8.3 draft stays private; teacher published observation visible to guardian only',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(1);
+        const opts=await client.query('SELECT * FROM public.kabarkelas_teacher_development_options($1)',[id(201)]);
+        assert.ok(opts.rows.length>0);
+        const chosen=opts.rows[0];
+        await client.query("SELECT public.kabarkelas_teacher_development_observe($1,$2,$3,'character','CHAR-01','Kemandirian',3,'Menyelesaikan tugas sendiri',false)",[id(201),chosen.student_id,chosen.class_id]);
+        await asUser(3);
+        const hidden=await client.query('SELECT * FROM public.kabarkelas_guardian_development_radar($1)',[id(201)]);
+        assert.equal(hidden.rows.length,0);
+        await asUser(1);
+        await client.query("SELECT public.kabarkelas_teacher_development_observe($1,$2,$3,'character','CHAR-01','Kemandirian',4,'Menyelesaikan proyek mandiri',true)",[id(201),chosen.student_id,chosen.class_id]);
+        await asUser(3);
+        const seen=await client.query('SELECT * FROM public.kabarkelas_guardian_development_radar($1)',[id(201)]);
+        assert.ok(seen.rows.every(r=>r.domain==='character'));
+        await asUser(2);
+        await client.query('SAVEPOINT denied');
+        await assert.rejects(client.query('SELECT * FROM public.kabarkelas_guardian_development_radar($1)',[id(201)]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT denied');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

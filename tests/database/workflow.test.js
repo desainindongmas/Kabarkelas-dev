@@ -438,6 +438,42 @@ test('PostgreSQL 17 migration replay, authorization and transaction tests', asyn
         await client.query('ROLLBACK TO SAVEPOINT denied');
       }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
     });
+    await t.test('P0 G0.8.5 rejects inactive tenant/school/student and preserves audit history',async()=>{
+      const client=new pg.Client({connectionString:url.href});await client.connect();
+      try{
+        await client.query('BEGIN');await client.query(fixtures);
+        const asUser=async n=>{await client.query('RESET ROLE');await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[id(1000+n)]);await client.query('SET LOCAL ROLE authenticated');};
+        await asUser(2);
+        await client.query("SELECT public.kabarkelas_approve_development_indicator($1,'character','CHAR-01','Kemandirian')",[id(201)]);
+        await asUser(1);
+        const opts=await client.query('SELECT * FROM public.kabarkelas_teacher_development_options($1)',[id(201)]);
+        const student=opts.rows[0];
+        const created=await client.query("SELECT public.kabarkelas_teacher_development_observe($1,$2,$3,'character','CHAR-01','Kemandirian',3,'Observasi lengkap awal',true) AS obs",[id(201),student.student_id,student.class_id]);
+        const obs=created.rows[0].obs;
+        const attempt=async()=>client.query("SELECT public.kabarkelas_update_development_observation($1,1,'correct',4,'Bukti koreksi lengkap','Koreksi karena data')",[obs]);
+        for(const [table,key,off] of [['tenants',id(101),'suspended'],['schools',id(201),'inactive'],['students',student.student_id,'inactive']]){
+          await client.query('RESET ROLE');
+          await client.query('SAVEPOINT inactive');
+          await client.query('UPDATE public.'+table+" SET status=$2 WHERE id=$1",[key,off]);
+          await asUser(1);
+          await client.query('SAVEPOINT denied');
+          await assert.rejects(attempt(),e=>e.code==='42501',table+' inactive must be denied');
+          await client.query('ROLLBACK TO SAVEPOINT denied');
+          await client.query('RESET ROLE');
+          await client.query('ROLLBACK TO SAVEPOINT inactive');
+        }
+        await asUser(1);
+        const corrected=await attempt();
+        assert.equal(corrected.rows[0].kabarkelas_update_development_observation,2);
+        await client.query('RESET ROLE');
+        await client.query('SAVEPOINT noedit');
+        await assert.rejects(client.query("UPDATE public.development_observation_audit SET reason='tampered' WHERE observation_id=$1",[obs]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT noedit');
+        await client.query('SAVEPOINT nodelete');
+        await assert.rejects(client.query('DELETE FROM public.development_observation_audit WHERE observation_id=$1',[obs]),e=>e.code==='42501');
+        await client.query('ROLLBACK TO SAVEPOINT nodelete');
+      }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+    });
     // Separate connections prove row locking, not just sequential JS behavior.
     await db.query(fixtures);
     const connect = async user => {

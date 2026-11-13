@@ -19,6 +19,10 @@ async function openDashboard(page,{multipleUnits=false}={}){
   throw new Error('Unexpected Supabase call '+path);
  });
  await page.goto('/');
+ if(multipleUnits){
+  await expect(page.getByRole('heading',{name:'Pilih unit sekolah'})).toBeVisible();
+  await page.getByRole('button',{name:/Yayasan Simulasi.*teacher/}).click();
+ }
  await expect(page.getByRole('heading',{name:'Dashboard Guru'})).toBeVisible();
  return ()=>logoutCount;
 }

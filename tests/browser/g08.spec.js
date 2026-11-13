@@ -19,5 +19,6 @@ test('G0.8 teacher dashboard renders responsive navigation and preserves student
  await expect(page.getByText('Nadia Simulasi')).toBeVisible();
  await page.setViewportSize({width:390,height:844});
  await expect(page.getByRole('heading',{name:'Dashboard Guru'})).toBeVisible();
- await expect(page.getByRole('button',{name:'Ganti unit',exact:true})).toBeVisible();
+ await expect(page.getByRole('navigation',{name:'Navigasi ruang kerja'}).getByRole('button',{name:'Ganti akun',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Ganti unit',exact:true})).toHaveCount(0);
 });

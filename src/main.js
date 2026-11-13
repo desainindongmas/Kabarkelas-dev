@@ -53,7 +53,25 @@ async function loadContext(){
  if(data.units.length===1) activeMembership=data.units[0];
  if(activeMembership)showHome(user,activeMembership); else showMembershipPicker(user,data.units);
 }
-function logoutButton(box){const b=el('button','Keluar','secondary');b.onclick=async()=>{await supabase.auth.signOut();currentContext=null;activeMembership=null;showLogin();};box.append(b);}
+function logoutButton(box,label='Keluar'){
+ const b=el('button',label,'secondary');
+ b.type='button';
+ b.dataset.accountAction='true';
+ b.onclick=async()=>{
+  if(b.disabled)return;
+  b.disabled=true;
+  try{
+   const {error}=await supabase.auth.signOut();
+   if(error)throw error;
+   currentContext=null;activeMembership=null;showLogin();
+  }catch{
+   b.disabled=false;
+   const target=b.closest('.card')||box;
+   message(target,'Gagal keluar dari akun. Periksa koneksi dan coba lagi.',true);
+  }
+ };
+ box.append(b);
+}
 function showMembershipPicker(user,units){const box=panel('Pilih unit sekolah','Anda memiliki lebih dari satu penugasan. Pilih konteks kerja.');box.append(el('p',user.email,'muted'));
  for(const unit of units){const btn=el('button',`${unit.tenant_name} · ${unit.school_name||'Yayasan'} · ${unit.role}`,'unit');btn.onclick=()=>{activeMembership=unit;showHome(user,unit);};box.append(btn);} logoutButton(box);}
 function showHome(user,unit){const box=panel('Dashboard KabarKelas','Ruang kerja sekolah yang terhubung ke data sesuai penugasan.');box.classList.add('dashboard-card');box.append(el('p',user.email,'muted'));box.append(el('div',unit.tenant_name,'highlight'));box.append(el('p',`Unit: ${unit.school_name||'Tingkat yayasan'}`));box.append(el('p',`Peran: ${unit.role}`));box.append(el('p','Nilai tersedia sesuai penugasan. Orang tua hanya melihat nilai yang sudah diterbitkan.','notice'));
@@ -425,7 +443,17 @@ function showHome(user,unit){const box=panel('Dashboard KabarKelas','Ruang kerja
    };
    box.append(ewsButton,ewsArea);
  }
- const change=el('button','Ganti unit','secondary');change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};box.append(change);logoutButton(box);decorateDashboard(box,user,unit);}
+ if(currentContext?.units?.length>1){
+  const change=el('button','Ganti unit','secondary');
+  change.type='button';
+  change.dataset.accountAction='true';
+  change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};
+  box.append(change);
+ }
+ logoutButton(box,'Ganti akun');
+ logoutButton(box);
+ decorateDashboard(box,user,unit);
+}
 function decorateDashboard(box,user,unit){
   const content=el('div',null,'dashboard-main');
   const top=el('header',null,'dashboard-topbar');
@@ -439,8 +467,11 @@ function decorateDashboard(box,user,unit){
   const homeChildren=[...box.children];
   const groups=[];
   let current=null;
+  const accountActions=[];
   for(const node of homeChildren){
-    if(node.tagName==='BUTTON'){
+    if(node.tagName==='BUTTON' && node.dataset.accountAction==='true'){
+      accountActions.push(node);
+    }else if(node.tagName==='BUTTON'){
       current=el('section',null,'dashboard-module');
       const heading=el('h2',node.textContent,'module-title');
       current.append(heading,node);groups.push(current);
@@ -465,6 +496,10 @@ function decorateDashboard(box,user,unit){
     const name=group.querySelector('.module-title')?.textContent||'Modul';
     const item=el('a',name,'nav-item');item.href='#'+group.id;
     nav.append(item);sections.append(group);
+  }
+  for(const action of accountActions){
+    action.className='nav-item nav-action';
+    nav.append(action);
   }
   content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='principal' && unit.school_id)content.append(buildPrincipalRubricManager(unit));if(unit.role==='teacher' && unit.school_id){content.append(buildTeacherDevelopment(unit));content.append(buildTeacherObservationReview(unit));}if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}content.append(sections);
   box.replaceChildren(nav,content);

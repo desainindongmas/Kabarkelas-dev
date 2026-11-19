@@ -97,3 +97,28 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
   finalize). Pembuatan soal/assessment masih via SQL.
 - Sekolah B punya mapel ganda MTK/BIN (legacy) + MTKB/BINB — nilai
   tetap valid, bukan kebocoran.
+
+## Phase 7 (2026-11-19): G11 — teacher-subject authz, buat penilaian, impor CSV
+- Migration 20261119000003_g11_teacher_subjects_assessment_import.sql (live):
+  - Tabel teacher_subject_assignments (TSA) + backfill 26 baris aktif.
+  - g05_access.teacher & g051_can_manage_draft kini subject-scoped:
+    guru hanya lihat kelola nilai mapel yang ditugaskan (TSA).
+  - RPC baru: kabarkelas_teacher_options, kabarkelas_my_periods,
+    kabarkelas_class_students, kabarkelas_create_assessment
+    (assessment draft + student_grades draft + assessment_attempts initial).
+  - RPC impor (SECURITY DEFINER, app.g11_import_allowed: foundation_admin/
+    principal/school_admin): kabarkelas_import_{tenants,schools,users,
+    memberships,subjects,classes,students,teacher_assignments,
+    guardian_links}. User dibuat langsung di auth.users+identities.
+- UI src/main.js: modul pilot baru — guru "Buat penilaian" (opsi
+  kelas·mapel dari TSA, periode, input nilai per siswa), admin
+  "Impor data massal" (CSV parse client-side → preview → RPC berurutan).
+- Sekolah B dedup: MTK/BIN legacy dihapus; assessments/schedules/TSA
+  direpoint ke MTKB/BINB. 8 mapel bersih.
+- scripts/verify_g11_features.mjs: 13/13 PASS (TSA, create_assessment,
+  cross-school/salah-mapel ditolak, finalize, import chain, dedup).
+- verify_multi_school_academic.mjs diupdate: ekspektasi subject-scoped
+  (guru-a1 hanya MTK; guru-ab IPA NSD1 + MTKB NSD2). 14/14 PASS.
+- docs/IMPORT-template.md: spesifikasi CSV per section.
+- Catatan: .xlsx tidak didukung — simpan sebagai CSV.
+

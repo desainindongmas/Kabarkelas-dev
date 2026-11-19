@@ -40,7 +40,8 @@ const check = (name, ok, detail = '') => { results.push({ name, ok }); console.l
   const mtk = rows.filter(r => r.subject_name === 'Matematika' && r.assessment_title?.includes('Kelas 4A'));
   check('guru-a1 grade_workflow ada nilai MTK 4A', !g.error && mtk.length === 105, `rows=${rows.length} mtk4a=${mtk.length}`);
   const subjects = new Set(rows.map(r => r.subject_name));
-  check('guru-a1 melihat semua mapel 4A/4B', ['Matematika','Ilmu Pengetahuan Alam','Bahasa Indonesia','Pendidikan Pancasila dan Kewarganegaraan'].every(x => subjects.has(x)), [...subjects].join(','));
+  // subject-scoped authz (G11): guru hanya melihat mapel yang ditugaskan
+  check('guru-a1 hanya mapel MTK (subject-scoped)', subjects.size === 1 && subjects.has('Matematika'), [...subjects].join(','));
 }
 // guru mapel baru (PPKn) — harus bisa akses nilai kelasnya
 {

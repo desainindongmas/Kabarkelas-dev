@@ -51,7 +51,7 @@ Data pilot: 2 yayasan demo, 3 sekolah, 3 siswa simulasi (Nadia/Tara/Raka),
    tercatat di tabel audit (`academic_workflow_events`, `development_observation_audit`, `report audit`).
 
 ## Langkah untuk pilot
-1. Sebarkan URL + akun pilot.guru@kabarkelas.dev ke 1–3 sekolah uji.
+1. Sebarkan URL + akun pilot ke 1–3 sekolah uji — panduan pengguna ada di `docs/PILOT-onboarding.md` (bisa dibagikan apa adanya).
 2. Minta mereka input nilai/remedial/rapor/EWS observasi pada data sintetis.
 3. Kumpulkan bug/UX feedback → perbaikan masuk branch fix → PR → merge → Pages auto-deploy.
 4. Saat pilot terbukti: upgrade Supabase ke Pro (leaked password + backup), baru buka sekolah nyata.

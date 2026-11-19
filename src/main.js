@@ -492,6 +492,8 @@ function showHome(user,unit){const box=panel('Dashboard KabarKelas','Ruang kerja
   change.onclick=()=>{activeMembership=null;showMembershipPicker(user,currentContext.units);};
   box.append(change);
  }
+ const pilotModules=buildPilotModules(unit);
+ if(pilotModules) box.append(pilotModules);
  logoutButton(box,'Ganti akun');
  logoutButton(box);
  decorateDashboard(box,user,unit);

@@ -70,3 +70,14 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
 - E2E live: homework_score via UI (valid 87 OK, lintas-kelas ditolak),
   quiz_create via UI, p5_record via UI, announce_create via UI — semua
   tercatat di DB.
+
+## Phase 5 (2026-11-19): fixture multi-school isolasi
+- Tenant baru "Yayasan Nusantara Cemerlang" (aa11bb22-…): 2 sekolah
+  (SD Nusantara 1 NSD1, SD Nusantara 2 NSD2), 105 siswa sintetis
+  (3 kelas x 35), 10 akun pilot lintas peran termasuk guru ab dan
+  foundation_admin. Password: PilotYayasan2026! — lihat
+  docs/MULTI-SCHOOL-pilot.md.
+- scripts/seed_multi_school_pilot.mjs: seed idempotent via pg pooler
+  (bukan SQL Editor). scripts/verify_multi_school_isolation.mjs:
+  15/15 RPC-level isolation checks PASS — tidak ada kebocoran
+  lintas sekolah; foundation_admin by design tanpa modul pilot.

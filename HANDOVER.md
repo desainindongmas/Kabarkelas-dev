@@ -33,10 +33,18 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
 ## Known holds
 - Supabase FREE tier: no leaked-password protection, no scheduled backup
 - npm run test:db requires local PostgreSQL (not available on this machine)
-- G10 E2E verified live 2026-11-19 as pilot.guru (teacher): all 6 modules render,
-  schedule/announcement show seed data, leave request submit→list works.
-  Homework/quiz/P5 verified to empty-state only (no seed rows yet).
-  Principal/school_admin/guardian roles untested — no pilot passwords exist
-  for owner accounts (msubhi.*@gmail.com).
+- G10 E2E verified live 2026-11-19 all four roles (see Phase 2 below).
+  Homework/quiz/P5 seeded with rows; leave request→approve flow verified.
 - Fixed post-G10: buildPilotModules was dead code (never invoked) so rollup
   tree-shook all G10 UI out of the bundle; wired into showHome @ 38ec923.
+
+## Phase 2 (2026-11-19): seed G10 + multi-role pilot accounts
+- New pilot accounts (password sama): pilot.kepala (principal),
+  pilot.admin (school_admin), pilot.ortu (guardian → SIM-001 verified link).
+  Provisioning script: supabase/seeds/pilot_accounts.sql (idempotent).
+- G10 content seeded via RPC as pilot.guru: 2 homework (published),
+  1 quiz, 5 homework_scores, 4 quiz_scores, 6 P5/Tahfizh records.
+- teacher_class_assignments: pilot.guru kini aktif di 5A/5B/6A.
+- E2E live verified per role: teacher (semua modul+data), principal
+  (leave_decide pending→approved OK), school_admin (jadwal OK),
+  guardian (hanya 5 modul, P5 hanya data anak ter-link SIM-001).

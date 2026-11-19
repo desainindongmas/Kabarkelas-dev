@@ -13,8 +13,10 @@ diketahui HOLD-by-design hingga upgrade Pro (leaked-password protection, schedul
 
 ## Akun pilot (sintetis, aman untuk dibagikan ke calon pilot)
 | Peran | Email | Password | Sekolah |
-|---|---|---|---|
-| Guru | pilot.guru@kabarkelas.dev | PilotKabarKelas2026! | SD Demo KabarKelas (Kelas 5A Uji, siswa Nadia Simulasi) |
+| Guru | pilot.guru@kabarkelas.dev | PilotKabarKelas2026! | SD Demo KabarKelas (Kelas 5A/5B/6A Uji) |
+| Kepala sekolah | pilot.kepala@kabarkelas.dev | PilotKabarKelas2026! | SD Demo KabarKelas |
+| Admin sekolah | pilot.admin@kabarkelas.dev | PilotKabarKelas2026! | SD Demo KabarKelas |
+| Orang tua | pilot.ortu@kabarkelas.dev | PilotKabarKelas2026! | SD Demo KabarKelas (siswa SIM-001 Aisyah Putri) |
 
 Akun peran lain sudah ada (pemilik): msubhi.online@gmail.com (guardian),
 muhsubhi24@gmail.com (principal), msubhi.subhi@gmail.com (foundation_admin),

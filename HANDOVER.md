@@ -57,5 +57,16 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
   RPC G10 ada di bundle (menangkap bug dead-code tree-shake). ~13s.
 - Backup manual: docs/BACKUP.md — pg_dump via pooler session :5432,
   jadwal mingguan + pra-migration, restore test ke project terpisah.
-- OPEN: rotasi GitHub PAT yang tertanam di remote URL .git/config;
-  leaked-password protection tetap butuh Pro (diterima untuk pilot).
+- DONE: PAT dihapus dari remote URL (Phase 4); token kini hanya di
+  secrets.env + credential helper. Rotasi PAT tetap disarankan.
+
+## Phase 4 (2026-11-19): UI write-paths + remote cleanup
+- Remote origin dibersihkan dari PAT; credential helper
+  ~/.kabarkelas/git-credential.sh membaca GITHUB_TOKEN dari secrets.env.
+- Migration 20261119000002 (applied live): kabarkelas_pilot_options
+  (class/subject) + kabarkelas_pilot_students untuk staf.
+- appendPilotForms di src/main.js: form buat tugas/kuis + input nilai,
+  catat P5/Tahfizh (staf), terbitkan pengumuman (principal/school_admin).
+- E2E live: homework_score via UI (valid 87 OK, lintas-kelas ditolak),
+  quiz_create via UI, p5_record via UI, announce_create via UI — semua
+  tercatat di DB.

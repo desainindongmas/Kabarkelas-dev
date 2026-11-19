@@ -946,17 +946,21 @@ function buildGuardianRadar(unit){
 function appendPilotForms(unit,kind,area,school,reload){
   const isStaff=['teacher','principal','school_admin'].includes(unit.role);
   const canManageAnnouncement=(unit.role==='principal'||unit.role==='school_admin');
+  const form=(title)=>{const f=el('div',null,'pilot-form');f.append(el('p',title,'form-title'));return f;};
+  const grid=(...nodes)=>{const g=el('div',null,'form-grid');for(const n of nodes)g.append(n);return g;};
+  const actions=(...btns)=>{const a=el('div',null,'form-actions');for(const b of btns)a.append(b);return a;};
+  const inp=(ph,type='text')=>{const i=el('input');i.placeholder=ph;i.type=type;return i;};
   if(kind==='announcement'&&canManageAnnouncement){
-    const form=el('form');form.style.marginTop='12px';
-    const title=el('input');title.placeholder='Judul pengumuman';title.required=true;
-    const body=el('textarea');body.placeholder='Isi pengumuman';body.required=true;body.rows=3;body.style.width='100%';
-    const submit=el('button','Terbitkan pengumuman','secondary');submit.type='submit';
-    form.append(title,body,submit);
-    form.onsubmit=async(ev)=>{ev.preventDefault();submit.disabled=true;
+    const f=form('Terbitkan pengumuman');
+    const title=inp('Judul pengumuman');title.required=true;
+    const body=el('textarea');body.placeholder='Isi pengumuman';body.required=true;body.rows=3;
+    const submit=el('button','Terbitkan','secondary');submit.type='button';
+    submit.onclick=async()=>{submit.disabled=true;
       const {error}=await supabase.rpc('kabarkelas_announce_create',{p_school:school,p_title:title.value,p_body:body.value});
       if(error)message(area,'Pengumuman gagal diterbitkan.',true);else reload();
       submit.disabled=false;};
-    area.append(form);
+    f.append(title,body,actions(submit));
+    area.append(f);
     return;
   }
   if(!isStaff||!['homework','quiz','p5'].includes(kind))return;
@@ -972,74 +976,73 @@ function appendPilotForms(unit,kind,area,school,reload){
     const select=(pairs,ph)=>{const s=el('select');const o=el('option',ph);o.value='';s.append(o);for(const p of pairs){const op=el('option',p.name);op.value=p.id;s.append(op);}return s;};
     const studentSelect=()=>select(studs.map(s2=>({id:s2.student_id,name:`${s2.display_name} · ${s2.class_name}`})),'Pilih siswa');
     if(kind==='homework'){
-      const f1=el('form');f1.style.marginTop='12px';
+      const f1=form('Beri tugas baru');
       const cls=select(classes,'Pilih kelas');const sub=select(subjects,'Pilih mapel');
-      const ti=el('input');ti.placeholder='Judul tugas';ti.required=true;
-      const ins=el('textarea');ins.placeholder='Petunjuk (opsional)';ins.rows=2;ins.style.width='100%';
-      const asg=el('input');asg.type='date';asg.required=true;asg.value=new Date().toISOString().slice(0,10);
-      const due=el('input');due.type='date';due.required=true;
-      const mx=el('input');mx.type='number';mx.min='1';mx.value='100';mx.required=true;mx.style.width='90px';
-      const b1=el('button','Beri tugas','secondary');b1.type='submit';
-      f1.append(el('p','Beri tugas baru','muted'),cls,sub,ti,ins,asg,due,mx,b1);
-      f1.onsubmit=async(ev)=>{ev.preventDefault();b1.disabled=true;
+      const ti=inp('Judul tugas');ti.required=true;
+      const ins=el('textarea');ins.placeholder='Petunjuk (opsional)';ins.rows=2;
+      const asg=inp('Mulai','date');asg.required=true;asg.value=new Date().toISOString().slice(0,10);
+      const due=inp('Tenggat','date');due.required=true;
+      const mx=inp('Nilai maks','number');mx.min='1';mx.value='100';mx.required=true;
+      const b1=el('button','Beri tugas','secondary');b1.type='button';
+      b1.onclick=async()=>{b1.disabled=true;
         const {error}=await supabase.rpc('kabarkelas_homework_create',{p_school:school,p_class:cls.value,p_subject:sub.value,p_title:ti.value,p_instructions:ins.value,p_assigned:asg.value,p_due:due.value,p_max:Number(mx.value)});
         if(error)message(area,'Tugas gagal dibuat.',true);else reload();
         b1.disabled=false;};
+      f1.append(grid(cls,sub,ti),ins,grid(asg,due,mx),actions(b1));
       area.append(f1);
-      const f2=el('form');f2.style.marginTop='12px';
+      const f2=form('Input nilai tugas');
       const hw=select((items.data||[]).map(h=>({id:h.id,name:`${h.title} · ${h.class_name}`})),'Pilih tugas');
       const st=studentSelect();
-      const sc=el('input');sc.type='number';sc.min='0';sc.step='0.5';sc.placeholder='Nilai';sc.required=true;sc.style.width='90px';
-      const nt=el('input');nt.placeholder='Catatan (opsional)';
-      const b2=el('button','Simpan nilai','secondary');b2.type='submit';
-      f2.append(el('p','Input nilai tugas','muted'),hw,st,sc,nt,b2);
-      f2.onsubmit=async(ev)=>{ev.preventDefault();if(!hw.value||!st.value){message(area,'Pilih tugas dan siswa dulu.',true);return;}b2.disabled=true;
+      const sc=inp('Nilai','number');sc.min='0';sc.step='0.5';sc.required=true;
+      const nt=inp('Catatan (opsional)');
+      const b2=el('button','Simpan nilai','secondary');b2.type='button';
+      b2.onclick=async()=>{if(!hw.value||!st.value){message(area,'Pilih tugas dan siswa dulu.',true);return;}b2.disabled=true;
         const {error}=await supabase.rpc('kabarkelas_homework_score',{p_homework:hw.value,p_student:st.value,p_score:Number(sc.value),p_note:nt.value});
         if(error)message(area,'Nilai gagal disimpan.',true);else reload();
         b2.disabled=false;};
+      f2.append(grid(hw,st,sc,nt),actions(b2));
       area.append(f2);
     }else if(kind==='quiz'){
-      const f1=el('form');f1.style.marginTop='12px';
+      const f1=form('Jadwalkan kuis baru');
       const cls=select(classes,'Pilih kelas');const sub=select(subjects,'Pilih mapel');
-      const ti=el('input');ti.placeholder='Judul kuis';ti.required=true;
-      const qd=el('input');qd.type='date';qd.required=true;qd.value=new Date().toISOString().slice(0,10);
-      const ts=el('input');ts.type='time';
-      const te=el('input');te.type='time';
-      const mx=el('input');mx.type='number';mx.min='1';mx.value='100';mx.required=true;mx.style.width='90px';
-      const nt0=el('input');nt0.placeholder='Catatan (opsional)';
-      const b1=el('button','Jadwalkan kuis','secondary');b1.type='submit';
-      f1.append(el('p','Jadwalkan kuis baru','muted'),cls,sub,ti,qd,ts,te,mx,nt0,b1);
-      f1.onsubmit=async(ev)=>{ev.preventDefault();b1.disabled=true;
+      const ti=inp('Judul kuis');ti.required=true;
+      const qd=inp('Tanggal','date');qd.required=true;qd.value=new Date().toISOString().slice(0,10);
+      const ts=inp('Mulai','time');const te=inp('Selesai','time');
+      const mx=inp('Nilai maks','number');mx.min='1';mx.value='100';mx.required=true;
+      const nt0=inp('Catatan (opsional)');
+      const b1=el('button','Jadwalkan','secondary');b1.type='button';
+      b1.onclick=async()=>{b1.disabled=true;
         const {error}=await supabase.rpc('kabarkelas_quiz_create',{p_school:school,p_class:cls.value,p_subject:sub.value,p_title:ti.value,p_quiz_on:qd.value,p_start:ts.value||null,p_end:te.value||null,p_max:Number(mx.value),p_notes:nt0.value});
         if(error)message(area,'Kuis gagal dijadwalkan.',true);else reload();
         b1.disabled=false;};
+      f1.append(grid(cls,sub,ti),grid(qd,ts,te,mx,nt0),actions(b1));
       area.append(f1);
-      const f2=el('form');f2.style.marginTop='12px';
+      const f2=form('Input nilai kuis');
       const qz=select((items.data||[]).map(q=>({id:q.id,name:`${q.title} · ${q.class_name}`})),'Pilih kuis');
       const st=studentSelect();
-      const sc=el('input');sc.type='number';sc.min='0';sc.step='0.5';sc.placeholder='Nilai';sc.required=true;sc.style.width='90px';
-      const nt=el('input');nt.placeholder='Catatan (opsional)';
-      const b2=el('button','Simpan nilai','secondary');b2.type='submit';
-      f2.append(el('p','Input nilai kuis','muted'),qz,st,sc,nt,b2);
-      f2.onsubmit=async(ev)=>{ev.preventDefault();if(!qz.value||!st.value){message(area,'Pilih kuis dan siswa dulu.',true);return;}b2.disabled=true;
+      const sc=inp('Nilai','number');sc.min='0';sc.step='0.5';sc.required=true;
+      const nt=inp('Catatan (opsional)');
+      const b2=el('button','Simpan nilai','secondary');b2.type='button';
+      b2.onclick=async()=>{if(!qz.value||!st.value){message(area,'Pilih kuis dan siswa dulu.',true);return;}b2.disabled=true;
         const {error}=await supabase.rpc('kabarkelas_quiz_score',{p_quiz:qz.value,p_student:st.value,p_score:Number(sc.value),p_note:nt.value});
         if(error)message(area,'Nilai gagal disimpan.',true);else reload();
         b2.disabled=false;};
+      f2.append(grid(qz,st,sc,nt),actions(b2));
       area.append(f2);
     }else if(kind==='p5'){
-      const f=el('form');f.style.marginTop='12px';
+      const f=form('Catat P5/Tahfizh');
       const st=studentSelect();
       const cat=el('select');
       for(const [v,l] of [['p5','P5'],['tahfizh','Tahfizh']]){const o=el('option',l);o.value=v;cat.append(o);}
-      const ind=el('input');ind.placeholder='Indikator (min. 3 karakter)';ind.required=true;
-      const sc=el('input');sc.type='number';sc.min='0';sc.max='100';sc.placeholder='Skor 0-100';sc.required=true;sc.style.width='90px';
-      const nt=el('input');nt.placeholder='Catatan (opsional)';
-      const b=el('button','Catat penilaian','secondary');b.type='submit';
-      f.append(el('p','Catat P5/Tahfizh','muted'),st,cat,ind,sc,nt,b);
-      f.onsubmit=async(ev)=>{ev.preventDefault();b.disabled=true;
+      const ind=inp('Indikator (min. 3 karakter)');ind.required=true;
+      const sc=inp('Skor 0-100','number');sc.min='0';sc.max='100';sc.required=true;
+      const nt=inp('Catatan (opsional)');
+      const b=el('button','Catat','secondary');b.type='button';
+      b.onclick=async()=>{b.disabled=true;
         const {error}=await supabase.rpc('kabarkelas_p5_record',{p_school:school,p_student:st.value,p_category:cat.value,p_indicator:ind.value,p_score:Number(sc.value),p_note:nt.value});
         if(error)message(area,'Penilaian gagal dicatat.',true);else reload();
         b.disabled=false;};
+      f.append(grid(st,cat,sc,nt),actions(b));
       area.append(f);
     }
   })();
@@ -1047,15 +1050,17 @@ function appendPilotForms(unit,kind,area,school,reload){
 
 // Form guru: buat penilaian (draft) untuk kelas+mapel yang ditugaskan
 function appendAssessmentForm(unit,school,area){
-  const form=el('form');form.style.marginTop='12px';
+  const wrap=el('div',null,'pilot-form');
+  wrap.append(el('p','Buat penilaian baru (draft)','form-title'));
   const pair=el('select');const pairPh=el('option','Pilih kelas · mapel');pairPh.value='';pair.append(pairPh);
   const period=el('select');const periodPh=el('option','Pilih periode');periodPh.value='';period.append(periodPh);
   const title=el('input');title.placeholder='Judul penilaian (mis. UH Bab 3)';title.required=true;
-  const maxScore=el('input');maxScore.type='number';maxScore.min='1';maxScore.value='100';maxScore.required=true;maxScore.style.width='90px';maxScore.placeholder='Nilai maks';
-  const scoreBox=el('div',null,'grade-results');
-  const submit=el('button','Buat penilaian','secondary');submit.type='submit';
-  form.append(el('p','Buat penilaian baru (draft)','muted'),pair,period,title,maxScore,submit);
-  area.append(form);
+  const maxScore=el('input');maxScore.type='number';maxScore.min='1';maxScore.value='100';maxScore.required=true;maxScore.placeholder='Nilai maks';
+  const scoreBox=el('div',null,'pilot-score-grid');
+  const submit=el('button','Buat penilaian','secondary');submit.type='button';
+  const hint=el('p','Pilih kelas·mapel untuk memuat daftar siswa.','form-hint');
+  wrap.append(el('div',null,'form-grid').append(pair,period,title,maxScore),hint,scoreBox,el('div',null,'form-actions').append(submit));
+  area.append(wrap);
   (async()=>{
     const [opts,periods]=await Promise.all([
       supabase.rpc('kabarkelas_teacher_options',{p_school:school}),
@@ -1076,19 +1081,18 @@ function appendAssessmentForm(unit,school,area){
     if(!clsId)return;
     const {data:studs,error}=await supabase.rpc('kabarkelas_class_students',{p_school:school,p_class:clsId});
     if(error){message(scoreBox,'Daftar siswa tidak dapat dimuat.',true);return;}
-    if(!studs?.length){scoreBox.append(el('p','Tidak ada siswa aktif di kelas ini.','muted'));return;}
-    const max=Number(maxScore.value)||100;
+    if(!studs?.length){hint.textContent='Tidak ada siswa aktif di kelas ini.';scoreBox.replaceChildren();return;}
+    hint.textContent=studs.length+' siswa — isi nilai (kosongkan untuk draft tanpa skor).';
     for(const s of studs){
-      const row=el('div',null,'student-row');
-      row.append(el('span',s.display_name+' · '+s.local_student_no));
-      const inp=el('input');inp.type='number';inp.min='0';inp.max=String(max);inp.step='0.5';inp.placeholder='0–'+max;inp.dataset.student=s.student_id;inp.style.width='90px';
+      const row=el('div',null,'score-row');
+      row.append(el('span',s.display_name+' · '+s.local_student_no,'sname'));
+      const inp=el('input');inp.type='number';inp.min='0';inp.max=String(max);inp.step='0.5';inp.placeholder='0–'+max;inp.dataset.student=s.student_id;
       row.append(inp);scoreBox.append(row);
     }
   };
   pair.onchange=renderScores;
   maxScore.onchange=renderScores;
-  form.onsubmit=async(ev)=>{
-    ev.preventDefault();
+  submit.onclick=async()=>{
     const [clsId,subId]=pair.value.split('|');
     if(!clsId||!subId||!period.value){message(area,'Pilih kelas·mapel dan periode dulu.',true);return;}
     const scores=[];
@@ -1101,7 +1105,7 @@ function appendAssessmentForm(unit,school,area){
     }
     if(!scores.length){message(area,'Isi minimal satu nilai siswa.',true);return;}
     submit.disabled=true;
-    const {data,error}=await supabase.rpc('kabarkelas_create_assessment',{
+    const {error}=await supabase.rpc('kabarkelas_create_assessment',{
       p_school:school,p_class:clsId,p_subject:subId,p_period:period.value,
       p_title:title.value,p_max_score:Number(maxScore.value),p_scores:scores,
     });
@@ -1188,6 +1192,135 @@ function appendImportUI(unit,area){
   area.append(wrap);
 }
 
+// Form jadwal: tambah entri lesson_schedules
+async function appendScheduleForm(unit,school,area,reload){
+  const wrap=el('div',null,'pilot-form');
+  wrap.append(el('p','Tambah jam pelajaran','form-title'));
+  const grid=el('div',null,'form-grid');
+  const cls=el('select');const clsPh=el('option','Pilih kelas');clsPh.value='';cls.append(clsPh);
+  const sub=el('select');const subPh=el('option','Pilih mapel');subPh.value='';sub.append(subPh);
+  const day=el('select');const dayPh=el('option','Hari');dayPh.value='';day.append(dayPh);
+  for(const [v,l] of [[1,'Senin'],[2,'Selasa'],[3,'Rabu'],[4,'Kamis'],[5,'Jumat'],[6,'Sabtu'],[7,'Minggu']]){const o=el('option',l);o.value=v;day.append(o);}
+  const st=el('input');st.type='time';st.required=true;
+  const en=el('input');en.type='time';en.required=true;
+  const room=el('input');room.placeholder='Ruang (opsional)';
+  grid.append(cls,sub,day,st,en,room);
+  const hint=el('p','Guru hanya bisa menambah mapel yang ditugaskan.','form-hint');
+  const submit=el('button','Simpan jadwal','secondary');submit.type='button';
+  const actions=el('div',null,'form-actions');actions.append(submit);
+  wrap.append(grid,hint,actions);
+  area.append(wrap);
+  const {data:opts,error}=await supabase.rpc('kabarkelas_pilot_options',{p_school:school});
+  if(error){wrap.append(el('p','Opsi kelas/mapel tidak tersedia.','form-hint'));return;}
+  const classes=(opts||[]).filter(o=>o.kind==='class');
+  const subjects=(opts||[]).filter(o=>o.kind==='subject');
+  let validPairs=null;
+  if(unit.role==='teacher'){
+    const tsa=await supabase.rpc('kabarkelas_teacher_options',{p_school:school});
+    const pairs=tsa.data||[];
+    if(!pairs.length){wrap.append(el('p','Belum ada penugasan mapel.','form-hint'));return;}
+    validPairs=new Set(pairs.map(o=>o.class_id+'|'+o.subject_id));
+    const clsSeen=new Set(),subSeen=new Map();
+    for(const o of pairs){
+      if(!clsSeen.has(o.class_id)){clsSeen.add(o.class_id);const op=el('option',o.class_name);op.value=o.class_id;cls.append(op);}
+      if(!subSeen.has(o.subject_id)){subSeen.set(o.subject_id,o.subject_name);}
+    }
+    for(const [id,name] of subSeen){const op=el('option',name);op.value=id;sub.append(op);}
+  }else{
+    for(const c of classes){const op=el('option',c.name);op.value=c.id;cls.append(op);}
+    for(const s of subjects){const op=el('option',s.name);op.value=s.id;sub.append(op);}
+  }
+  submit.onclick=async()=>{
+    if(!cls.value||!sub.value||!day.value){message(area,'Lengkapi kelas, mapel, dan hari.',true);return;}
+    if(validPairs&&!validPairs.has(cls.value+'|'+sub.value)){message(area,'Kelas dan mapel tidak ditugaskan ke Anda.',true);return;}
+    submit.disabled=true;
+    const {error:e}=await supabase.rpc('kabarkelas_schedule_create',{
+      p_school:school,p_class:cls.value,p_subject:sub.value,p_weekday:Number(day.value),
+      p_start:st.value,p_end:en.value,p_room:room.value||null,p_year:'2026/2027'});
+    if(e){message(area,'Jadwal gagal disimpan: '+(e.message||''),true);submit.disabled=false;return;}
+    reload();
+  };
+}
+
+// Form kehadiran: buat sesi + input per siswa
+async function appendAttendanceForm(unit,school,area,reload){
+  const wrap=el('div',null,'pilot-form');
+  wrap.append(el('p','Input kehadiran kelas','form-title'));
+  const grid=el('div',null,'form-grid');
+  const cls=el('select');const clsPh=el('option','Pilih kelas');clsPh.value='';cls.append(clsPh);
+  const date=el('input');date.type='date';date.required=true;date.value=new Date().toISOString().slice(0,10);
+  const period=el('select');const perPh=el('option','Pilih periode');perPh.value='';period.append(perPh);
+  grid.append(cls,date,period);
+  const roster=el('div',null,'attendance-grid');
+  const hint=el('p','Pilih kelas untuk memuat daftar siswa.','form-hint');
+  const actions=el('div',null,'form-actions');
+  const submit=el('button','Simpan kehadiran','secondary');submit.type='button';submit.disabled=true;
+  actions.append(submit);
+  wrap.append(grid,hint,roster,actions);
+  area.append(wrap);
+  const [opts,periods]=await Promise.all([
+    supabase.rpc('kabarkelas_pilot_options',{p_school:school}),
+    supabase.rpc('kabarkelas_my_periods',{p_school:school}),
+  ]);
+  const classes=(opts.data||[]).filter(o=>o.kind==='class');
+  for(const c of classes){const op=el('option',c.name);op.value=c.id;cls.append(op);}
+  for(const p of periods.data||[]){const op=el('option',p.name||p.code);op.value=p.id;period.append(op);}
+  const CODES=[['present','Hadir'],['sick','Sakit'],['excused','Izin'],['absent','Alpha'],['late','Terlambat']];
+  let sessionId=null;
+  cls.onchange=async()=>{
+    roster.replaceChildren();sessionId=null;submit.disabled=true;
+    if(!cls.value)return;
+    const {data:studs,error}=await supabase.rpc('kabarkelas_class_students',{p_school:school,p_class:cls.value});
+    if(error||!studs?.length){hint.textContent='Tidak ada siswa aktif.';return;}
+    hint.textContent=studs.length+' siswa — atur status lalu simpan.';
+    for(const s of studs){
+      const cell=el('div',null,'att-cell');
+      cell.append(el('span',s.display_name));
+      const sel=el('select');sel.dataset.student=s.student_id;
+      for(const [v,l] of CODES){const o=el('option',l);o.value=v;sel.append(o);}
+      sel.value='present';
+      cell.append(sel);roster.append(cell);
+    }
+    submit.disabled=false;
+  };
+  submit.onclick=async()=>{
+    if(!cls.value||!date.value||!period.value){message(area,'Pilih kelas, tanggal, dan periode.',true);return;}
+    submit.disabled=true;
+    if(!sessionId){
+      const {data:sid,error:ce}=await supabase.rpc('kabarkelas_attendance_create',{p_school:school,p_class:cls.value,p_date:date.value,p_period:period.value});
+      if(ce){message(area,'Sesi gagal dibuat: '+(ce.message||''),true);submit.disabled=false;return;}
+      sessionId=sid;
+    }
+    let fail=0;
+    for(const sel of roster.querySelectorAll('select[data-student]')){
+      const {error:me}=await supabase.rpc('kabarkelas_attendance_mark',{p_session:sessionId,p_student:sel.dataset.student,p_code:sel.value});
+      if(me)fail++;
+    }
+    if(fail){message(area,fail+' data gagal disimpan.',true);submit.disabled=false;return;}
+    reload();
+  };
+}
+
+// Detail kehadiran satu sesi (staf)
+async function showAttendanceDetail(sessionId,area){
+  const detail=el('div',null,'pilot-form');
+  detail.append(el('p','Detail kehadiran','form-title'));
+  area.append(detail);
+  const {data,error}=await supabase.rpc('kabarkelas_attendance_records',{p_session:sessionId});
+  if(error){detail.append(el('p','Detail tidak dapat dimuat.','form-hint'));return;}
+  const tbl=el('table',null,'alert-table');
+  const head=el('tr');for(const h of ['Siswa','No.','Status'])head.append(el('th',h));
+  const thead=el('thead');thead.append(head);tbl.append(thead);
+  const tb=el('tbody');
+  const labels={present:'Hadir',sick:'Sakit',excused:'Izin',absent:'Alpha',late:'Terlambat'};
+  for(const r of data||[]){
+    const tr=el('tr');
+    tr.append(el('td',r.display_name),el('td',r.local_student_no||'—'),el('td',labels[r.attendance_code]||r.attendance_code||'—'));
+    tb.append(tr);
+  }
+  tbl.append(tb);detail.append(tbl);
+}
+
 // ===== Pilot features =====
 function buildPilotModule(unit, kind){
   const titles={
@@ -1220,6 +1353,30 @@ function buildPilotModule(unit, kind){
           }
           tbl.append(tb);area.append(tbl);
         }
+        if(['teacher','principal','school_admin'].includes(unit.role)) appendScheduleForm(unit,school,area,()=>btn.onclick());
+      }else if(kind==='attendance'){
+        const isStaff=['teacher','principal','school_admin'].includes(unit.role);
+        const {data,error}=await supabase.rpc('kabarkelas_attendance_list',{p_school:school});
+        area.replaceChildren(el('h2',title));
+        if(error){area.append(el('p','Data kehadiran tidak dapat dimuat.','error'));}
+        else if(!data?.length)area.append(el('p','Belum ada sesi kehadiran.','muted'));
+        else{
+          const tbl=el('table',null,'alert-table');
+          const head=el('tr');for(const h of ['Tanggal','Kelas','Status','Jumlah','Tidak hadir',''])head.append(el('th',h));
+          const thead=el('thead');thead.append(head);tbl.append(thead);
+          const tb=el('tbody');
+          for(const s of data){
+            const tr=el('tr');
+            tr.append(el('td',s.session_date),el('td',s.class_name),el('td',s.state));
+            tr.append(el('td',String(s.record_count)),el('td',String(s.absent_count)));
+            const tda=el('td');
+            const view=el('button','Detail','ghost');view.type='button';view.style.width='auto';view.style.padding='5px 10px';view.style.fontSize='12px';
+            view.onclick=async()=>{view.disabled=true;await showAttendanceDetail(s.id,area);view.disabled=false;};
+            tda.append(view);tr.append(tda);tb.append(tr);
+          }
+          tbl.append(tb);area.append(tbl);
+        }
+        if(isStaff)appendAttendanceForm(unit,school,area,()=>btn.onclick());
       }else if(kind==='announcement'){
         const {data,error}=await supabase.rpc('kabarkelas_announce_list',{p_school:school});
         area.replaceChildren(el('h2',title));
@@ -1261,16 +1418,29 @@ function buildPilotModule(unit, kind){
           area.append(form);
         }
       }else if(kind==='homework'||kind==='quiz'){
-        const rpc=kind==='homework'?'kabarkelas_homework_list':'kabarkelas_quiz_list';
-        const {data,error}=await supabase.rpc(rpc,{p_school:school});
         area.replaceChildren(el('h2',title));
-        if(error)area.append(el('p','Data tidak dapat dimuat.','error'));
-        else if(!data?.length)area.append(el('p','Belum ada data.','muted'));
-        else for(const item of data){
-          const line=el('div',null,'student-row');
-          const when=kind==='homework'?item.due_on:item.quiz_on;
-          line.append(el('strong',item.title),el('p',item.class_name+' · '+item.subject_name+' · '+item.teacher_name,'muted'),el('p',(kind==='homework'?'Tenggat: ':'Tanggal: ')+when+' · Maks '+item.max_score,'muted'));
-          area.append(line);
+        if(unit.role==='guardian'){
+          const {data,error}=await supabase.rpc('kabarkelas_parent_assignments',{p_school:school});
+          const rows=(data||[]).filter(x=>x.kind===(kind==='homework'?'homework':'quiz'));
+          if(error)area.append(el('p','Data tidak dapat dimuat.','error'));
+          else if(!rows.length)area.append(el('p','Belum ada '+(kind==='homework'?'tugas':'kuis')+' untuk anak Anda.','muted'));
+          else for(const item of rows){
+            const line=el('div',null,'student-row');
+            const scoreTxt=item.score!=null?`Nilai: ${item.score}/${item.max_score}`:'Belum dinilai';
+            line.append(el('strong',item.title),el('p',item.detail,'muted'),el('p',(kind==='homework'?'Tenggat: ':'Tanggal: ')+item.due_or_on+' · '+scoreTxt,'muted'));
+            area.append(line);
+          }
+        }else{
+          const rpc=kind==='homework'?'kabarkelas_homework_list':'kabarkelas_quiz_list';
+          const {data,error}=await supabase.rpc(rpc,{p_school:school});
+          if(error)area.append(el('p','Data tidak dapat dimuat.','error'));
+          else if(!data?.length)area.append(el('p','Belum ada data.','muted'));
+          else for(const item of data){
+            const line=el('div',null,'student-row');
+            const when=kind==='homework'?item.due_on:item.quiz_on;
+            line.append(el('strong',item.title),el('p',item.class_name+' · '+item.subject_name+' · '+item.teacher_name,'muted'),el('p',(kind==='homework'?'Tenggat: ':'Tanggal: ')+when+' · Maks '+item.max_score,'muted'));
+            area.append(line);
+          }
         }
       }else if(kind==='p5'){
         const {data,error}=await supabase.rpc('kabarkelas_p5_list',{p_school:school});
@@ -1298,11 +1468,11 @@ function buildPilotModules(unit){
   const wrap=el('section',null,'dashboard-module');
   wrap.append(el('h2','Modul pilot'));
   const allowed={
-    teacher:['schedule','announcement','leave','homework','quiz','p5','assessment'],
-    principal:['schedule','announcement','leave','homework','quiz','p5','import'],
-    school_admin:['schedule','announcement','leave','homework','quiz','p5','import'],
+    teacher:['schedule','attendance','announcement','leave','homework','quiz','p5','assessment'],
+    principal:['schedule','attendance','announcement','leave','homework','quiz','p5','import'],
+    school_admin:['schedule','attendance','announcement','leave','homework','quiz','p5','import'],
     foundation_admin:['import'],
-    guardian:['schedule','announcement','homework','quiz','p5'],
+    guardian:['schedule','attendance','announcement','homework','quiz','p5'],
   };
   const kinds=allowed[unit.role]||[];
   if(!kinds.length)return null;

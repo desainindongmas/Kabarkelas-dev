@@ -19,7 +19,7 @@ BEGIN
  IF NOT app.pilot_can(p_school,ARRAY['teacher','principal','school_admin','guardian','foundation_admin']) THEN
    RAISE EXCEPTION 'School unavailable' USING ERRCODE='42501'; END IF;
  RETURN QUERY
- SELECT ls.id,ls.class_id,c.name,ls.subject_id,s.name,u.display_name,ls.teacher_user_id,ls.weekday,ls.start_time,ls.end_time,ls.room,ls.academic_year
+ SELECT ls.id,ls.class_id,c.name,ls.subject_id,s.name,ls.teacher_user_id,COALESCE(u.email,'Guru'),ls.weekday,ls.start_time,ls.end_time,ls.room,ls.academic_year
  FROM public.lesson_schedules ls
  JOIN public.school_classes c ON c.id=ls.class_id AND c.school_id=ls.school_id AND c.tenant_id=ls.tenant_id
  JOIN public.subjects s ON s.id=ls.subject_id AND s.school_id=ls.school_id AND s.tenant_id=ls.tenant_id
@@ -41,7 +41,7 @@ BEGIN
  IF NOT app.pilot_can(p_school,ARRAY['teacher','principal','school_admin','guardian']) THEN
    RAISE EXCEPTION 'School unavailable' USING ERRCODE='42501'; END IF;
  RETURN QUERY
- SELECT a.id,a.title,a.body,a.published_at,a.created_by,u.display_name
+ SELECT a.id,a.title,a.body,a.published_at,a.created_by,COALESCE(u.email,'Sekolah')
  FROM public.announcements a
  JOIN public.users u ON u.id=a.created_by
  WHERE a.school_id=p_school AND a.status='published' AND a.published_at<=now()
@@ -85,7 +85,7 @@ BEGIN
  IF NOT app.pilot_can(p_school,ARRAY['teacher','principal','school_admin']) THEN
    RAISE EXCEPTION 'School unavailable' USING ERRCODE='42501'; END IF;
  RETURN QUERY
- SELECT l.id,l.teacher_user_id,u.display_name,l.leave_type,l.starts_on,l.ends_on,l.reason,l.status,l.decided_by,l.decided_at,l.decision_note
+ SELECT l.id,l.teacher_user_id,COALESCE(u.email,'Guru'),l.leave_type,l.starts_on,l.ends_on,l.reason,l.status,l.decided_by,l.decided_at,l.decision_note
  FROM public.teacher_leave_requests l
  JOIN public.users u ON u.id=l.teacher_user_id
  WHERE l.school_id=p_school
@@ -144,7 +144,7 @@ BEGIN
  IF NOT app.pilot_can(p_school,ARRAY['teacher','principal','school_admin','guardian']) THEN
    RAISE EXCEPTION 'School unavailable' USING ERRCODE='42501'; END IF;
  RETURN QUERY
- SELECT h.id,h.class_id,c.name,h.subject_id,s.name,u.display_name,h.teacher_user_id,h.title,h.instructions,h.assigned_on,h.due_on,h.max_score,h.status
+ SELECT h.id,h.class_id,c.name,h.subject_id,s.name,h.teacher_user_id,COALESCE(u.email,'Guru'),h.title,h.instructions,h.assigned_on,h.due_on,h.max_score,h.status
  FROM public.homework_assignments h
  JOIN public.school_classes c ON c.id=h.class_id AND c.school_id=h.school_id AND c.tenant_id=h.tenant_id
  JOIN public.subjects s ON s.id=h.subject_id AND s.school_id=h.school_id AND s.tenant_id=h.tenant_id
@@ -208,7 +208,7 @@ BEGIN
  IF NOT app.pilot_can(p_school,ARRAY['teacher','principal','school_admin','guardian']) THEN
    RAISE EXCEPTION 'School unavailable' USING ERRCODE='42501'; END IF;
  RETURN QUERY
- SELECT q.id,q.class_id,c.name,q.subject_id,s.name,u.display_name,q.teacher_user_id,q.title,q.quiz_on,q.start_time,q.end_time,q.max_score,q.status,q.notes
+ SELECT q.id,q.class_id,c.name,q.subject_id,s.name,q.teacher_user_id,COALESCE(u.email,'Guru'),q.title,q.quiz_on,q.start_time,q.end_time,q.max_score,q.status,q.notes
  FROM public.quiz_schedules q
  JOIN public.school_classes c ON c.id=q.class_id AND c.school_id=q.school_id AND c.tenant_id=q.tenant_id
  JOIN public.subjects s ON s.id=q.subject_id AND s.school_id=q.school_id AND s.tenant_id=q.tenant_id
@@ -273,9 +273,10 @@ BEGIN
  IF NOT app.pilot_can(p_school,ARRAY['guardian']) THEN
    RAISE EXCEPTION 'Guardian access only' USING ERRCODE='42501'; END IF;
  RETURN QUERY
- SELECT 'homework'::text,h.id,h.title,
-        c.name||' · '||s.name||' · oleh '||u.display_name,
-        h.due_on,h.max_score,sc.score,sc.note
+ SELECT * FROM (
+ SELECT 'homework'::text AS kind,h.id AS ref_id,h.title,
+        c.name||' · '||s.name||' · oleh '||COALESCE(u.email,'Guru') AS detail,
+        h.due_on AS due_or_on,h.max_score,sc.score,sc.note
  FROM public.homework_assignments h
  JOIN public.school_classes c ON c.id=h.class_id AND c.school_id=h.school_id AND c.tenant_id=h.tenant_id
  JOIN public.subjects s ON s.id=h.subject_id AND s.school_id=h.school_id AND s.tenant_id=h.tenant_id
@@ -286,7 +287,7 @@ BEGIN
  WHERE h.school_id=p_school AND h.status IN('published','closed')
  UNION ALL
  SELECT 'quiz'::text,q.id,q.title,
-        c.name||' · '||s.name||' · oleh '||u.display_name,
+        c.name||' · '||s.name||' · oleh '||COALESCE(u.email,'Guru'),
         q.quiz_on,q.max_score,sc.score,sc.note
  FROM public.quiz_schedules q
  JOIN public.school_classes c ON c.id=q.class_id AND c.school_id=q.school_id AND c.tenant_id=q.tenant_id
@@ -296,7 +297,7 @@ BEGIN
  JOIN public.class_student_enrollments e ON e.school_id=q.school_id AND e.class_id=q.class_id AND e.student_id=g.student_id AND e.status='active'
  LEFT JOIN public.assignment_scores sc ON sc.quiz_id=q.id AND sc.student_id=g.student_id AND sc.school_id=q.school_id AND sc.tenant_id=q.tenant_id
  WHERE q.school_id=p_school AND q.status IN('scheduled','done')
- ORDER BY due_or_on DESC LIMIT 200;
+ ) x ORDER BY due_or_on DESC LIMIT 200;
 END $$;
 
 CREATE OR REPLACE FUNCTION public.kabarkelas_parent_assignments(p_school uuid)
@@ -311,7 +312,7 @@ BEGIN
  IF NOT app.pilot_can(p_school,ARRAY['teacher','principal','school_admin','guardian']) THEN
    RAISE EXCEPTION 'School unavailable' USING ERRCODE='42501'; END IF;
  RETURN QUERY
- SELECT p.id,p.student_id,s.display_name,p.category,p.indicator,p.score,p.note,p.assessed_by,u.display_name,p.assessed_on
+ SELECT p.id,p.student_id,s.display_name,p.category,p.indicator,p.score,p.note,p.assessed_by,COALESCE(u.email,'Penilai'),p.assessed_on
  FROM public.p5_tahfizh_assessments p
  JOIN public.students s ON s.id=p.student_id AND s.school_id=p.school_id AND s.tenant_id=p.tenant_id
  JOIN public.users u ON u.id=p.assessed_by

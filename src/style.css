@@ -115,3 +115,24 @@ body:has(.dashboard-card){display:block;padding:0;background:#f6f8fa}
 .guardian-trends form label{display:flex;align-items:center;gap:10px;font-size:14px;color:#34565d}
 .guardian-trends .trend-card svg{max-height:300px}
 .guardian-trends .trend-values{overflow-wrap:anywhere}
+
+/* ===== Pilot module forms (rapi) ===== */
+.pilot-form{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.pilot-form .form-title{font-size:13px;font-weight:700;color:var(--ink);margin:0 0 2px}
+.pilot-form .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.pilot-form input,.pilot-form select,.pilot-form textarea{font-size:13px;padding:9px 11px;margin-top:0}
+.pilot-form textarea{min-height:56px;resize:vertical}
+.pilot-form .form-actions{display:flex;gap:8px;flex-wrap:wrap}
+.pilot-form .form-actions button{width:auto;margin-top:0;padding:9px 16px;font-size:13px}
+.pilot-form .form-hint{font-size:12px;color:var(--muted);margin:0}
+.pilot-list{margin-top:12px}
+.pilot-list .item-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;background:#fbfdfc}
+.pilot-list .item-card strong{font-size:13.5px;color:var(--ink)}
+.pilot-list .item-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.pilot-score-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:8px}
+.pilot-score-grid .score-row{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:#fff}
+.pilot-score-grid .score-row .sname{flex:1;font-size:12.5px;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pilot-score-grid .score-row input{width:76px;flex:none;font-size:13px;padding:7px 9px}
+.attendance-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:10px}
+.attendance-grid .att-cell{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;font-size:12.5px}
+.attendance-grid .att-cell select{flex:1;min-width:0;font-size:12px;padding:6px 8px}

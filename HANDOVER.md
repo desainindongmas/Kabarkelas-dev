@@ -122,3 +122,34 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
 - docs/IMPORT-template.md: spesifikasi CSV per section.
 - Catatan: .xlsx tidak didukung — simpan sebagai CSV.
 
+
+## Phase 8 (2026-11-19): G12 — kehadiran, jadwal, rapikan form pilot
+- Migration 20261119000004_g12_attendance_schedule_pilot.sql (live):
+  - RPC kabarkelas_attendance_{list,records,create,mark,transition}:
+    draft→confirmed→published; reopen hanya confirmed→draft.
+    published immutable. Guru hanya kelas/mapel TSA-nya.
+  - RPC kabarkelas_schedule_{create,end}: guru hanya pair kelas+mapel
+    di TSA; principal/school_admin bebas. Tidak ada edit jadwal.
+  - scripts/verify_g12_pilot.mjs: 11/11 PASS.
+- Fix live DB: g10_parent_assignments pakai u.display_name (kolom tidak
+  ada di public.users) + UNION ORDER BY invalid → di-patch ke
+  COALESCE(u.email,'Guru') + subquery wrap. File migrasi G10 juga
+  disinkronkan (semua u.display_name → COALESCE(u.email,...) +
+  urutan kolom SELECT disesuaikan RETURNS TABLE).
+- UI src/main.js: appendScheduleForm, appendAttendanceForm,
+  showAttendanceDetail; appendPilotForms ditulis ulang dengan
+  .pilot-form/.form-grid/.form-actions; assessment form distyle;
+  guardian homework/quiz pakai kabarkelas_parent_assignments (nilai
+  ikut tampil); schedule/attendance write form untuk staf;
+  guardian dapat modul P5 (read-only via p5_list).
+- Fix bug .append().value='' chain (append return undefined) →
+  crash "Cannot set properties of undefined".
+- src/style.css: +.pilot-form/.form-grid/.form-actions/
+  .pilot-score-grid/.attendance-grid/.score-row.
+- Verifikasi: check PASS, test 18/18, build PASS; live browser:
+  guru attendance/schedule/tugas form render; ortu tugas tampil
+  dengan detail+nilai, kuis/P5 kosong (belum ada data — benar).
+- Re-run: verify_g11 13/13, isolation 15/15, academic 14/14 — tetap PASS.
+- Sisa gap beta: homework/quiz tanpa edit/hapus/tutup, attendance
+  tanpa un-publish, schedule tanpa edit, announcement tanpa edit/
+  arsip, belum ada UI audit-log.

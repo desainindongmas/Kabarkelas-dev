@@ -352,95 +352,137 @@ function showHome(user,unit){const box=panel('Dashboard KabarKelas','Ruang kerja
  if((unit.role==='teacher'||unit.role==='principal') && unit.school_id){
    const ewsButton=el('button','Pratinjau pendampingan siswa (EWS)','secondary');
    const ewsArea=el('div',null,'grade-results');
-   ewsButton.onclick=async()=>{
-     ewsButton.disabled=true;
-     const {data,error}=await supabase.rpc('kabarkelas_ews_academic_preview',{
-       p_school:unit.school_id,p_threshold:70,p_min_assessments:2
-     });
-     ewsArea.replaceChildren(el('h2','Indikator akademik — untuk tinjauan guru'));
-     if(error)ewsArea.append(el('p','Indikator tidak tersedia untuk akun ini.','error'));
-     else if(!data?.length)ewsArea.append(el('p','Belum ada siswa dengan minimal dua penilaian final.','muted'));
-     else for(const entry of data){
-       const line=el('div',null,'student-row');
-       line.append(el('strong',entry.student_name),el('p','Rata-rata '+entry.average_percent+'% dari '+entry.assessment_count+' penilaian final','muted'));
-       line.append(el('p',entry.requires_review?'Perlu ditinjau oleh guru — bukan label siswa':'Belum ada sinyal akademik berdasarkan aturan simulasi','muted'));
-       ewsArea.append(line);
-     }
-     const today=new Date();
-     const end=today.toISOString().slice(0,10);
-     const start=new Date(today.getTime()-29*86400000).toISOString().slice(0,10);
-     const attendance=await supabase.rpc('kabarkelas_ews_attendance_preview',{
-       p_school:unit.school_id,p_start:start,p_end:end,p_absent_threshold:3
-     });
-     ewsArea.append(el('h3','Kehadiran — 30 hari terakhir'));
-     if(attendance.error) ewsArea.append(el('p','Data kehadiran belum bisa dimuat.','muted'));
-     else if(!attendance.data?.length) ewsArea.append(el('p','Belum ada sesi absensi yang diterbitkan pada periode ini.','muted'));
-     else for(const record of attendance.data){
-       const line=el('div',null,'student-row');
-       line.append(el('strong',record.student_name),el('p',record.unexcused_absences+' tanpa keterangan dari '+record.session_count+' sesi','muted'));
-       if(record.requires_review)line.append(el('p','Perlu peninjauan oleh guru','muted'));
-       ewsArea.append(line);
-     }
-     ewsArea.append(el('p','Ambang 70% dan 3 ketidakhadiran tanpa keterangan adalah aturan simulasi; tindak lanjut belum diaktifkan. Data tidak dibagikan ke orang tua.','muted'));
-     if(unit.role==='principal'){
-       const tools=el('div',null,'student-row');
-       tools.append(el('h3','Aturan deteksi sekolah'));
-       const configure=el('button','Aktifkan aturan akademik (70%, minimal 2 nilai)','secondary');
-       configure.onclick=async()=>{
-         configure.disabled=true;
-         const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
-           p_school:unit.school_id,p_key:'academic_low_average',
-           p_parameters:{threshold_percent:70,minimum_assessments:2}
-         });
-         message(tools,error?'Pengaturan aturan ditolak.':'Aturan akademik berhasil diaktifkan.',!!error);
-         configure.disabled=false;
-       };
-       const attendance=el('button','Aktifkan aturan absensi (3 kali / 30 hari)','secondary');
-       attendance.onclick=async()=>{
-         attendance.disabled=true;
-         const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
-           p_school:unit.school_id,p_key:'attendance_unexcused',
-           p_parameters:{absent_threshold:3,lookback_days:30}
-         });
-         message(tools,error?'Pengaturan aturan ditolak.':'Aturan absensi berhasil diaktifkan.',!!error);
-         attendance.disabled=false;
-       };
-       const scan=el('button','Jalankan deteksi hari ini','secondary');
-       scan.onclick=async()=>{
-         scan.disabled=true;
-         const {data,error}=await supabase.rpc('kabarkelas_ews_scan_school',{p_school:unit.school_id});
-         if(error){message(tools,'Deteksi gagal; periksa pengaturan sekolah.',true);scan.disabled=false;return;}
-         message(tools,(data.created||0)+' peringatan baru tercatat untuk ditinjau.');
-         ewsButton.click();
-       };
-       tools.append(configure,attendance,scan);ewsArea.append(tools);
-     }
-     const alerts=await supabase.rpc('kabarkelas_ews_my_alerts',{p_school:unit.school_id});
-     ewsArea.append(el('h3','Tindak lanjut peringatan'));
-     if(alerts.error) ewsArea.append(el('p','Daftar tindak lanjut belum bisa dimuat.','muted'));
-     else if(!alerts.data?.length) ewsArea.append(el('p','Belum ada peringatan yang diaktifkan sekolah.','muted'));
-     else for(const alert of alerts.data){
-       const line=el('div',null,'student-row');
-       line.append(el('strong',alert.student_name+' · '+alert.alert_status),el('p',alert.explanation,'muted'));
-       const note=el('input');note.placeholder='Catatan tindak lanjut (minimal 5 karakter)';
-       line.append(note);
-       const actions=alert.alert_status==='open'?['under_review','dismissed']:alert.alert_status==='under_review'?['resolved','dismissed']:['open'];
-       for(const action of actions){
-         const btn=el('button',({under_review:'Mulai tinjauan',resolved:'Selesaikan',dismissed:'Tutup tanpa tindakan',open:'Buka kembali'})[action],'secondary');
-         btn.type='button';
-         btn.onclick=async()=>{
-           if(note.value.trim().length<5){message(line,'Isi catatan minimal 5 karakter.',true);return;}
-           btn.disabled=true;
-           const {error}=await supabase.rpc('kabarkelas_ews_update_alert',{p_alert:alert.alert_id,p_expected_status:alert.alert_status,p_next_status:action,p_note:note.value.trim()});
-           if(error){message(line,'Perubahan ditolak atau status telah berubah. Muat ulang.',true);btn.disabled=false;return;}
-           ewsButton.click();
-         };
-         line.append(btn);
-       }
-       ewsArea.append(line);
-     }
-     ewsButton.disabled=false;
-   };
+  ewsButton.onclick=async()=>{
+    ewsButton.disabled=true;
+    ewsArea.replaceChildren(el('p','Memuat indikator EWS...','muted'));
+    const today=new Date();
+    const end=today.toISOString().slice(0,10);
+    const start=new Date(today.getTime()-29*86400000).toISOString().slice(0,10);
+    const [academic,attendance]=await Promise.all([
+      supabase.rpc('kabarkelas_ews_academic_preview',{p_school:unit.school_id,p_threshold:70,p_min_assessments:2}),
+      supabase.rpc('kabarkelas_ews_attendance_preview',{p_school:unit.school_id,p_start:start,p_end:end,p_absent_threshold:3})
+    ]);
+    ewsArea.replaceChildren();
+    const intro=el('div',null,'ews-intro');
+    intro.append(el('h2','Early Warning System'),el('p','Peringatan adalah awal percakapan pendampingan, bukan label untuk siswa. Aturan sekolah menentukan indikator; tindak lanjut dicatat per status.','muted'));
+    const counters=el('div',null,'kpi-grid');
+    const mkCounter=(label,value,detail,kind)=>{const c=el('div',null,'kpi-card');c.append(el('p',label,'kpi-label'),el('strong',String(value),'kpi-value'+(kind==='warn'?' warn':'')),el('p',detail,'kpi-detail'));counters.append(c);};
+    const flaggedA=(academic.data||[]).filter(x=>x.requires_review);
+    const flaggedT=(attendance.data||[]).filter(x=>x.requires_review);
+    const flaggedStudents=new Set([...flaggedA,...flaggedT].map(x=>x.student_id||x.student_name));
+    mkCounter('Siswa perlu perhatian',flaggedStudents.size,flaggedA.length+' sinyal akademik · '+flaggedT.length+' sinyal kehadiran',flaggedStudents.size?'warn':'');
+    mkCounter('Ambang akademik','70%','Rata-rata di bawah ambang, min. 2 penilaian final');
+    mkCounter('Ambang kehadiran','3×','Tidak hadir tanpa keterangan / 30 hari');
+    intro.append(counters);ewsArea.append(intro);
+    // Academic signals table
+    const acadBox=el('div',null,'dashboard-module');acadBox.style.marginTop='16px';
+    const ah=el('div',null,'module-head');ah.append(el('h3','Sinyal akademik'));acadBox.append(ah);
+    if(academic.error)acadBox.append(el('p','Indikator akademik tidak tersedia untuk akun ini.','error'));
+    else if(!academic.data?.length)acadBox.append(el('p','Belum ada siswa dengan minimal dua penilaian final.','empty-note'));
+    else{
+      const tbl=el('table',null,'alert-table');const thead=el('thead');const hr=el('tr');
+      for(const h of ['Siswa','Rata-rata','Status'])hr.append(el('th',h));
+      thead.append(hr);tbl.append(thead);const tb=el('tbody');
+      for(const entry of academic.data){
+        const tr=el('tr');
+        const tdn=el('td');tdn.append(el('strong',entry.student_name));tr.append(tdn);
+        const tdp=el('td');tdp.append(el('span','Rata-rata '));tdp.append(el('strong',Number(entry.average_percent).toLocaleString('id-ID')+'%'));tdp.append(el('span',' dari '+entry.assessment_count+' penilaian final','sub'));tr.append(tdp);
+        const tds=el('td');tds.append(entry.requires_review?el('span','Perlu ditinjau','badge badge-review'):el('span','Aman','badge badge-ok'));tr.append(tds);
+        tb.append(tr);
+      }
+      tbl.append(tb);acadBox.append(tbl);
+    }
+    ewsArea.append(acadBox);
+    // Attendance signals table
+    const attBox=el('div',null,'dashboard-module');attBox.style.marginTop='16px';
+    const atth=el('div',null,'module-head');atth.append(el('h3','Kehadiran — 30 hari terakhir'));attBox.append(atth);
+    if(attendance.error)attBox.append(el('p','Data kehadiran belum bisa dimuat.','muted'));
+    else if(!attendance.data?.length)attBox.append(el('p','Belum ada sesi absensi yang diterbitkan pada periode ini.','empty-note'));
+    else{
+      const tbl=el('table',null,'alert-table');const thead=el('thead');const hr=el('tr');
+      for(const h of ['Siswa','Tidak hadir','Sesi','Status'])hr.append(el('th',h));
+      thead.append(hr);tbl.append(thead);const tb=el('tbody');
+      for(const record of attendance.data){
+        const tr=el('tr');
+        const tdn=el('td');tdn.append(el('strong',record.student_name));tr.append(tdn);
+        const tdu=el('td');tdu.append(document.createTextNode(String(record.unexcused_absences)));tr.append(tdu);
+        const tds=el('td');tds.append(document.createTextNode(String(record.session_count)+' sesi'));tr.append(tds);
+        const tdst=el('td');tdst.append(record.requires_review?el('span','Perlu peninjauan','badge badge-review'):el('span','Aman','badge badge-ok'));tr.append(tdst);
+        tb.append(tr);
+      }
+      tbl.append(tb);attBox.append(tbl);
+    }
+    ewsArea.append(attBox);
+    ewsArea.append(el('p','Ambang 70% dan 3 ketidakhadiran tanpa keterangan adalah aturan simulasi; data tidak dibagikan ke orang tua.','muted'));
+    if(unit.role==='principal'){
+      const tools=el('div',null,'student-row');
+      tools.append(el('h3','Aturan deteksi sekolah'));
+      const configure=el('button','Aktifkan aturan akademik (70%, minimal 2 nilai)','secondary');
+      configure.onclick=async()=>{
+        configure.disabled=true;
+        const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
+          p_school:unit.school_id,p_key:'academic_low_average',
+          p_parameters:{threshold_percent:70,minimum_assessments:2}
+        });
+        message(tools,error?'Pengaturan aturan ditolak.':'Aturan akademik berhasil diaktifkan.',!!error);
+        configure.disabled=false;
+      };
+      const attendanceBtn=el('button','Aktifkan aturan absensi (3 kali / 30 hari)','secondary');
+      attendanceBtn.onclick=async()=>{
+        attendanceBtn.disabled=true;
+        const {error}=await supabase.rpc('kabarkelas_ews_activate_rule',{
+          p_school:unit.school_id,p_key:'attendance_unexcused',
+          p_parameters:{absent_threshold:3,lookback_days:30}
+        });
+        message(tools,error?'Pengaturan aturan ditolak.':'Aturan absensi berhasil diaktifkan.',!!error);
+        attendanceBtn.disabled=false;
+      };
+      const scan=el('button','Jalankan deteksi hari ini','secondary');
+      scan.onclick=async()=>{
+        scan.disabled=true;
+        const {data,error}=await supabase.rpc('kabarkelas_ews_scan_school',{p_school:unit.school_id});
+        if(error){message(tools,'Deteksi gagal; periksa pengaturan sekolah.',true);scan.disabled=false;return;}
+        message(tools,(data.created||0)+' peringatan baru tercatat untuk ditinjau.');
+        ewsButton.click();
+      };
+      tools.append(configure,attendanceBtn,scan);ewsArea.append(tools);
+    }
+    const alerts=await supabase.rpc('kabarkelas_ews_my_alerts',{p_school:unit.school_id});
+    ewsArea.append(el('h3','Tindak lanjut peringatan'));
+    if(alerts.error) ewsArea.append(el('p','Daftar tindak lanjut belum bisa dimuat.','muted'));
+    else if(!alerts.data?.length) ewsArea.append(el('p','Belum ada peringatan yang diaktifkan sekolah.','muted'));
+    else{
+      const tbl=el('table',null,'alert-table');const thead=el('thead');const hr=el('tr');
+      for(const h of ['Siswa','Sinyal','Risiko','Status','Tindak lanjut'])hr.append(el('th',h));
+      thead.append(hr);tbl.append(thead);const tb=el('tbody');
+      for(const alert of alerts.data){
+        const tr=el('tr');
+        const tdn=el('td');tdn.append(el('strong',alert.student_name));tr.append(tdn);
+        const tds2=el('td');tds2.append(el('span',alert.explanation||'—'));tr.append(tds2);
+        const tdr=el('td');tdr.append(severityBadge(alert.severity));tr.append(tdr);
+        const tdst=el('td');tdst.append(statusBadge(alert.alert_status));tr.append(tdst);
+        const tdn2=el('td');
+        const note=el('input');note.placeholder='Catatan (min. 5 karakter)';note.style.marginTop='0';note.style.marginBottom='6px';
+        tdn2.append(note);
+        const actions=alert.alert_status==='open'?['under_review','dismissed']:alert.alert_status==='under_review'?['resolved','dismissed']:['open'];
+        for(const action of actions){
+          const btn=el('button',({under_review:'Mulai tinjauan',resolved:'Selesaikan',dismissed:'Tutup',open:'Buka lagi'})[action],'secondary');
+          btn.type='button';btn.style.width='auto';btn.style.marginTop='4px';btn.style.display='block';
+          btn.onclick=async()=>{
+            if(note.value.trim().length<5){message(tr,'Isi catatan minimal 5 karakter.',true);return;}
+            btn.disabled=true;
+            const {error}=await supabase.rpc('kabarkelas_ews_update_alert',{p_alert:alert.alert_id,p_expected_status:alert.alert_status,p_next_status:action,p_note:note.value.trim()});
+            if(error){message(tr,'Perubahan ditolak atau status telah berubah. Muat ulang.',true);btn.disabled=false;return;}
+            ewsButton.click();
+          };
+          tdn2.append(btn);
+        }
+        tr.append(tdn2);tb.append(tr);
+      }
+      tbl.append(tb);ewsArea.append(tbl);
+    }
+    ewsButton.disabled=false;
+  };
    box.append(ewsButton,ewsArea);
  }
  if(currentContext?.units?.length>1){
@@ -454,16 +496,30 @@ function showHome(user,unit){const box=panel('Dashboard KabarKelas','Ruang kerja
  logoutButton(box);
  decorateDashboard(box,user,unit);
 }
+const ROLE_LABELS={teacher:'Guru',principal:'Kepala sekolah',guardian:'Orang tua',foundation_admin:'Yayasan',school_admin:'Kepala sekolah'};
+const NAV_GROUPS={
+  teacher:[['AKADEMIK',['Lihat penilaian akademik','Kelola nilai awal & remedial','Observasi kompetensi & karakter','Tinjau observasi terdahulu','Kelola rapor semester']],['SEKOLAH',['Pratinjau pendampingan siswa (EWS)']]],
+  principal:[['AKADEMIK',['Lihat penilaian akademik','Kelola rapor semester','Atur kebijakan remedial & rilis nilai','Rubrik kompetensi & karakter']],['SEKOLAH',['Pratinjau pendampingan siswa (EWS)','Lihat siswa sekolah']]],
+  guardian:[['AKADEMIK',['Lihat nilai yang sudah diterbitkan','Lihat rapor yang diterbitkan','Lihat nilai harian yang sudah dirilis','Perkembangan akademik','Jaring kompetensi & karakter']],['SISWA',['Lihat anak saya']]],
+  foundation_admin:[],
+  school_admin:[['AKADEMIK',['Lihat penilaian akademik','Kelola rapor semester']],['SEKOLAH',['Pratinjau pendampingan siswa (EWS)','Lihat siswa sekolah']]],
+};
 function decorateDashboard(box,user,unit){
   const content=el('div',null,'dashboard-main');
   const top=el('header',null,'dashboard-topbar');
-  const eyebrow=el('p','KABARKELAS / RUANG KERJA','eyebrow');
-  const title=el('h1',({teacher:'Dashboard Guru',principal:'Dashboard Kepala Sekolah',guardian:'Perkembangan Anak',foundation_admin:'Dashboard Yayasan'})[unit.role]||'Dashboard Sekolah');
-  const desc=el('p',unit.school_name||unit.tenant_name,'muted');
-  top.append(eyebrow,title,desc);
+  top.id='dashboard-overview';
+  const topText=el('div');
+  topText.append(el('p','KABARKELAS / RUANG KERJA','eyebrow'));
+  const titles={teacher:'Dashboard Guru',principal:'Dashboard Kepala Sekolah',guardian:'Perkembangan Anak',foundation_admin:'Dashboard Yayasan',school_admin:'Dashboard Sekolah'};
+  topText.append(el('h1',titles[unit.role]||'Dashboard Sekolah'));
+  topText.append(el('p',`${unit.school_name||unit.tenant_name} · ${user.email||''}`,'muted'));
+  top.append(topText);
   const welcome=el('div',null,'welcome-panel');
-  welcome.append(el('span','Selamat datang di KabarKelas','welcome-label'),el('strong',unit.tenant_name||'Yayasan'),' ',el('p','Pilih modul untuk bekerja dengan data sekolah sesuai hak akses Anda.','muted'));
-  const sections=el('div',null,'dashboard-sections');
+  const hour=new Date().getHours();
+  const greet=hour<11?'Selamat pagi':hour<15?'Selamat siang':hour<19?'Selamat sore':'Selamat malam';
+  const displayName=(user.email||'').split('@')[0];
+  welcome.append(el('span',greet+', '+displayName,'welcome-label'),el('strong',unit.tenant_name||'Yayasan'),el('p','Data, nilai, dan pendampingan siswa sesuai hak akses peran Anda.','muted'));
+  const sections=el('div',null,'section-grid');
   const homeChildren=[...box.children];
   const groups=[];
   let current=null;
@@ -486,22 +542,37 @@ function decorateDashboard(box,user,unit){
   const nav=el('nav',null,'dashboard-nav');
   nav.setAttribute('aria-label','Navigasi ruang kerja');
   const brand=el('div','📚 KabarKelas','dashboard-brand');
-  const role=el('p',({teacher:'Guru',principal:'Kepala sekolah',guardian:'Orang tua',foundation_admin:'Yayasan'})[unit.role]||unit.role,'role-label');
-  nav.append(brand,role,el('p','MENU UTAMA','nav-label'));
-  const mainLink=el('a','Ringkasan','nav-item');mainLink.href='#dashboard-overview';
-  top.id='dashboard-overview';nav.append(mainLink);
-  for(let i=0;i<groups.length;i++){
-    const group=groups[i];
-    group.id='module-'+i;
-    const name=group.querySelector('.module-title')?.textContent||'Modul';
-    const item=el('a',name,'nav-item');item.href='#'+group.id;
-    nav.append(item);sections.append(group);
+  nav.append(brand,el('p',unit.school_name||unit.tenant_name,'nav-school'));
+  const role=el('p',(ROLE_LABELS[unit.role]||unit.role),'role-label');
+  nav.append(role,el('p','MENU UTAMA','nav-label'));
+  const mainLink=el('a','Ringkasan','nav-item');mainLink.href='#dashboard-overview';nav.append(mainLink);
+  const groupTitles=NAV_GROUPS[unit.role]||[];
+  const matched=new Set();
+  let navIndex=0;
+  for(const [groupName,names] of groupTitles){
+    const visible=groups.filter(g=>names.includes(g.querySelector('.module-title')?.textContent));
+    if(!visible.length)continue;
+    nav.append(el('p',groupName,'nav-label'));
+    for(const g of visible){
+      matched.add(g);
+      g.id='module-'+(navIndex++);
+      const name=g.querySelector('.module-title').textContent;
+      const item=el('a',name,'nav-item');item.href='#'+g.id;
+      if(/EWS|pendampingan/i.test(name)){const badge=el('span','','nav-item-count');badge.textContent='EWS';item.append(badge);}
+      nav.append(item);sections.append(g);
+    }
   }
+  const rest=groups.filter(g=>!matched.has(g));
+  if(rest.length){nav.append(el('p','LAINNYA','nav-label'));for(const g of rest){g.id='module-'+(navIndex++);const item=el('a',g.querySelector('.module-title').textContent,'nav-item');item.href='#'+g.id;nav.append(item);sections.append(g);}}
   for(const action of accountActions){
     action.className='nav-item nav-action';
     nav.append(action);
   }
-  content.append(top,welcome,buildLiveOverview(unit));if(unit.role==='principal' && unit.school_id)content.append(buildPrincipalRubricManager(unit));if(unit.role==='teacher' && unit.school_id){content.append(buildTeacherDevelopment(unit));content.append(buildTeacherObservationReview(unit));}if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}content.append(sections);
+  content.append(top,welcome,buildOverview(unit),buildLiveOverview(unit));
+  if(unit.role==='principal' && unit.school_id)content.append(buildPrincipalRubricManager(unit));
+  if(unit.role==='teacher' && unit.school_id){content.append(buildTeacherDevelopment(unit));content.append(buildTeacherObservationReview(unit));}
+  if(unit.role==='guardian' && unit.school_id){content.append(buildGuardianAcademicTrends(unit));content.append(buildGuardianRadar(unit));}
+  content.append(sections);
   box.replaceChildren(nav,content);
   box.setAttribute('aria-label','Dashboard KabarKelas');
 }
@@ -556,6 +627,132 @@ function buildGuardianAcademicTrends(unit){
   finally{button.disabled=false;}
  };
  return section;
+}
+
+// ===== Ringkasan overview: KPI strip + EWS priority table (demo parity) =====
+function buildOverview(unit){
+  const section=el('section',null,'live-overview');
+  section.setAttribute('aria-label','Ringkasan harian');
+  const head=el('div',null,'module-head');
+  head.append(el('h2','Ringkasan harian'));
+  const refresh=el('button','Muat ringkasan','secondary');refresh.type='button';
+  head.append(refresh);
+  section.append(head);
+  const grid=el('div',null,'kpi-grid');
+  const ewsBox=el('div',null,'ews-priority');
+  const state=el('p','Ringkasan dihitung dari data yang boleh diakses peran Anda.','muted');
+  section.append(grid,ewsBox,state);
+  const kpi=(label,value,detail,kind)=>{
+    const card=el('div',null,'kpi-card');
+    card.append(el('p',label,'kpi-label'),el('strong',String(value),'kpi-value'+(kind==='warn'?' warn':'')),el('p',detail,'kpi-detail'));
+    grid.append(card);
+  };
+  let generation=0;
+  const load=async()=>{
+    const version=++generation;
+    refresh.disabled=true;state.textContent='Memuat data terbaru...';grid.replaceChildren();ewsBox.replaceChildren();
+    if(!unit.school_id){
+      if(unit.role==='foundation_admin'){
+        kpi('Unit sekolah','—','Agregat yayasan belum tersedia dari API yang berizin');
+        state.textContent='Akses yayasan bersifat agregat; data siswa individual tidak dibuka.';
+      }else state.textContent='Penugasan sekolah belum tersedia.';
+      refresh.disabled=false;return;
+    }
+    try{
+      const studentMethod=unit.role==='teacher'?'kabarkelas_my_students':'kabarkelas_my_role_students';
+      const {data:students,error:studentError}=await supabase.rpc(studentMethod,{p_school_id:unit.school_id});
+      if(version!==generation)return;
+      if(studentError||!Array.isArray(students))throw new Error('students');
+      const count=new Set(students.map(x=>x.id||x.student_id||x.local_student_no).filter(Boolean)).size;
+      kpi(unit.role==='guardian'?'Anak terverifikasi':'Siswa aktif tercakup',count,'Sesuai penugasan aktif');
+
+      if(unit.role==='guardian'){
+        const [{data:trends,error:tErr},{data:rel,error:rErr}]=await Promise.all([
+          supabase.rpc('kabarkelas_guardian_academic_trends',{p_school:unit.school_id}),
+          supabase.rpc('kabarkelas_my_released_reports',{p_school:unit.school_id})
+        ]);
+        if(version!==generation)return;
+        const pcts=(Array.isArray(trends)?trends:[]).map(x=>Number(x.score_percent)).filter(n=>Number.isFinite(n)&&n>=0&&n<=100);
+        kpi('Rata-rata nilai',pcts.length?Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length)+'/100':'—',pcts.length?pcts.length+' penilaian dirilis':'Belum ada nilai dirilis');
+        kpi('Rapor terbit',Array.isArray(rel)?rel.length:0,'Rapor semester yang sudah diterbitkan');
+        state.textContent='Ringkasan berhasil dimuat.';
+      }else{
+        // teacher / principal / school_admin: grades + EWS + reports
+        const [{data:grades,error:gErr},{data:alerts,error:aErr},{data:reports,error:rpErr}]=await Promise.all([
+          supabase.rpc('kabarkelas_grade_workflow',{p_school_id:unit.school_id}),
+          supabase.rpc('kabarkelas_ews_my_alerts',{p_school:unit.school_id}).catch(()=>({data:null,error:true})),
+          supabase.rpc('kabarkelas_my_class_reports',{p_school:unit.school_id}).catch(()=>({data:null,error:true}))
+        ]);
+        if(version!==generation)return;
+        const gradeList=Array.isArray(grades)?grades:[];
+        const published=gradeList.filter(g=>g.grade_status==='published').length;
+        const draft=gradeList.filter(g=>g.grade_status==='draft').length;
+        const submitted=gradeList.filter(g=>g.grade_status==='submitted'||g.grade_status==='approved').length;
+        kpi('Penilaian',gradeList.length,draft+' draf · '+submitted+' proses · '+published+' terbit');
+        const alertList=Array.isArray(alerts)?alerts:[];
+        const open=alertList.filter(a=>a.alert_status==='open').length;
+        const review=alertList.filter(a=>a.alert_status==='under_review').length;
+        kpi('Perlu pendampingan',open+review,open+' terbuka · '+review+' ditinjau','warn');
+        const reportList=Array.isArray(reports)?reports:[];
+        kpi('Paket rapor',reportList.length,reportList.filter(r=>['teacher_finalize','homeroom_review','principal_sign','release'].includes((r.allowed_actions||[])[0]||'')).length+' menunggu tindakan');
+        // EWS priority table
+        ewsBox.append(buildEwsPriority(unit,alertList));
+        state.textContent='Ringkasan berhasil dimuat dari API sekolah.';
+      }
+    }catch{
+      if(version===generation){grid.replaceChildren();state.textContent='Ringkasan belum dapat dimuat. Tidak ada angka perkiraan yang ditampilkan.';}
+    }finally{if(version===generation)refresh.disabled=false;}
+  };
+  refresh.onclick=load;
+  // Lazy: ringkasan hanya dimuat saat pengguna menekan tombol, agar dashboard awal tidak memicu RPC tambahan.
+  return section;
+}
+
+function severityBadge(sev){
+  // ews severity: monitor | review ; derive high risk from alert signal/rule if needed
+  if(sev==='review')return el('span','Perlu perhatian','badge badge-review');
+  return el('span','Pantau','badge badge-ok');
+}
+function statusBadge(st){
+  const map={open:['Terbuka','badge-high'],under_review:['Ditinjau','badge-review'],resolved:['Selesai','badge-ok'],dismissed:['Ditutup','badge-draft']};
+  const [label,cls]=map[st]||[st,'badge-draft'];
+  return el('span',label,'badge '+cls);
+}
+function buildEwsPriority(unit,alerts){
+  const box=el('div',null,'dashboard-module');
+  box.style.marginTop='18px';
+  const head=el('div',null,'module-head');
+  head.append(el('h3','Early Warning System — prioritas pendampingan'));
+  const all=el('button','Lihat semua','ghost');all.type='button';
+  all.onclick=()=>{document.getElementById('module-ews')?.scrollIntoView({behavior:'smooth'});};
+  head.append(all);
+  box.append(head);
+  if(!alerts.length){box.append(el('p','Belum ada peringatan EWS aktif untuk sekolah ini.','empty-note'));return box;}
+  const sorted=[...alerts].sort((a,b)=>{
+    const rank=s=>s.alert_status==='open'?0:s.alert_status==='under_review'?1:2;
+    return rank(a)-rank(b)||String(b.detected_at).localeCompare(String(a.detected_at));
+  }).slice(0,8);
+  const table=el('table',null,'alert-table');
+  const thead=el('thead');const hr=el('tr');
+  for(const h of ['Siswa','Sinyal','Risiko','Status'])hr.append(el('th',h));
+  thead.append(hr);table.append(thead);
+  const tbody=el('tbody');
+  for(const a of sorted){
+    const tr=el('tr');
+    const tdName=el('td');tdName.append(el('strong',a.student_name));
+    tdName.append(el('span',a.signal?humanizeSignal(a.signal):'Peringatan','sub'));
+    tr.append(tdName);
+    const tdSig=el('td');tdSig.append(el('span',a.explanation||'—'));tr.append(tdSig);
+    const tdRisk=el('td');tdRisk.append(severityBadge(a.severity));tr.append(tdRisk);
+    const tdSt=el('td');tdSt.append(statusBadge(a.alert_status));tr.append(tdSt);
+    tbody.append(tr);
+  }
+  table.append(tbody);box.append(table);
+  if(alerts.length>8)box.append(el('p',`+ ${alerts.length-8} peringatan lainnya — buka modul EWS untuk tindak lanjut.`,'muted'));
+  return box;
+}
+function humanizeSignal(sig){
+  return String(sig).replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
 }
 function buildLiveOverview(unit){
   const section=el('section',null,'live-overview');
@@ -741,4 +938,126 @@ function buildGuardianRadar(unit){
   finally{button.disabled=false;}
  };
  return wrap;
+}
+
+// ===== Pilot features =====
+function buildPilotModule(unit, kind){
+  const titles={
+    schedule:'Jadwal pelajaran',attendance:'Kehadiran',announcement:'Pengumuman',
+    leave:'Izin guru',homework:'Tugas',quiz:'Kuis',p5:'P5 & Tahfizh',
+  };
+  const title=titles[kind]||kind;
+  const btn=el('button',title,'secondary');
+  const area=el('div',null,'grade-results');
+  btn.onclick=async()=>{
+    btn.disabled=true;area.replaceChildren(el('p','Memuat...','muted'));
+    try{
+      const school=unit.school_id;
+      if(kind==='schedule'){
+        const {data,error}=await supabase.rpc('kabarkelas_schedule_list',{p_school:school});
+        area.replaceChildren(el('h2',title));
+        if(error)area.append(el('p','Jadwal tidak dapat dimuat.','error'));
+        else if(!data?.length)area.append(el('p','Belum ada jadwal.','muted'));
+        else{
+          const days=['','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+          const tbl=el('table',null,'alert-table');
+          const head=el('tr');for(const h of ['Hari','Kelas','Mapel','Guru','Jam','Ruang'])head.append(el('th',h));
+          const thead=el('thead');thead.append(head);tbl.append(thead);
+          const tb=el('tbody');
+          for(const s of data){
+            const tr=el('tr');
+            tr.append(el('td',days[s.weekday]||s.weekday),el('td',s.class_name),el('td',s.subject_name),el('td',s.teacher_name),el('td',(s.start_time||'').slice(0,5)+'–'+(s.end_time||'').slice(0,5)),el('td',s.room||'—'));
+            tb.append(tr);
+          }
+          tbl.append(tb);area.append(tbl);
+        }
+      }else if(kind==='announcement'){
+        const {data,error}=await supabase.rpc('kabarkelas_announce_list',{p_school:school});
+        area.replaceChildren(el('h2',title));
+        if(error)area.append(el('p','Pengumuman tidak dapat dimuat.','error'));
+        else if(!data?.length)area.append(el('p','Belum ada pengumuman.','muted'));
+        else for(const a of data){
+          const line=el('div',null,'student-row');
+          line.append(el('strong',a.title),el('p',a.body,'muted'),el('p',new Date(a.published_at).toLocaleDateString('id-ID')+' · '+a.creator_name,'muted'));
+          area.append(line);
+        }
+      }else if(kind==='leave'){
+        const {data,error}=await supabase.rpc('kabarkelas_leave_list',{p_school:school});
+        area.replaceChildren(el('h2',title));
+        if(error)area.append(el('p','Izin tidak dapat dimuat.','error'));
+        else if(!data?.length)area.append(el('p','Belum ada pengajuan izin.','muted'));
+        else for(const l of data){
+          const line=el('div',null,'student-row');
+          line.append(el('strong',l.teacher_name+' · '+l.leave_type),el('p',l.starts_on+' s.d. '+l.ends_on+' · '+l.reason,'muted'),el('p','Status: '+l.status,'muted'));
+          if((unit.role==='principal'||unit.role==='school_admin') && l.status==='pending'){
+            const approve=el('button','Setujui','secondary');const reject=el('button','Tolak','secondary');
+            approve.onclick=async()=>{await supabase.rpc('kabarkelas_leave_decide',{p_leave:l.id,p_approve:true});btn.onclick();};
+            reject.onclick=async()=>{await supabase.rpc('kabarkelas_leave_decide',{p_leave:l.id,p_approve:false});btn.onclick();};
+            line.append(approve,reject);
+          }
+          area.append(line);
+        }
+        if(unit.role==='teacher'){
+          const form=el('form');form.style.marginTop='12px';
+          const type=el('select');for(const [v,l] of [['sick','Sakit'],['personal','Pribadi'],['official','Resmi'],['other','Lainnya']]){const o=el('option',l);o.value=v;type.append(o);}
+          const start=el('input');start.type='date';start.required=true;
+          const end=el('input');end.type='date';end.required=true;
+          const reason=el('input');reason.placeholder='Alasan (min. 5 karakter)';reason.required=true;
+          const submit=el('button','Ajukan izin','secondary');submit.type='submit';
+          form.append(type,start,end,reason,submit);
+          form.onsubmit=async(ev)=>{ev.preventDefault();submit.disabled=true;
+            const {error}=await supabase.rpc('kabarkelas_leave_request',{p_school:school,p_type:type.value,p_start:start.value,p_end:end.value,p_reason:reason.value});
+            if(error)message(area,'Izin gagal diajukan.',true);else btn.onclick();
+            submit.disabled=false;};
+          area.append(form);
+        }
+      }else if(kind==='homework'||kind==='quiz'){
+        const rpc=kind==='homework'?'kabarkelas_homework_list':'kabarkelas_quiz_list';
+        const {data,error}=await supabase.rpc(rpc,{p_school:school});
+        area.replaceChildren(el('h2',title));
+        if(error)area.append(el('p','Data tidak dapat dimuat.','error'));
+        else if(!data?.length)area.append(el('p','Belum ada data.','muted'));
+        else for(const item of data){
+          const line=el('div',null,'student-row');
+          const when=kind==='homework'?item.due_on:item.quiz_on;
+          line.append(el('strong',item.title),el('p',item.class_name+' · '+item.subject_name+' · '+item.teacher_name,'muted'),el('p',(kind==='homework'?'Tenggat: ':'Tanggal: ')+when+' · Maks '+item.max_score,'muted'));
+          area.append(line);
+        }
+      }else if(kind==='p5'){
+        const {data,error}=await supabase.rpc('kabarkelas_p5_list',{p_school:school});
+        area.replaceChildren(el('h2',title));
+        if(error)area.append(el('p','Data P5/Tahfizh tidak dapat dimuat.','error'));
+        else if(!data?.length)area.append(el('p','Belum ada penilaian P5/Tahfizh.','muted'));
+        else for(const p of data){
+          const line=el('div',null,'student-row');
+          line.append(el('strong',p.student_name+' · '+p.category),el('p',p.indicator+' · Skor '+p.score+'/100','muted'),el('p','Oleh '+p.assessor_name+' · '+p.assessed_on,'muted'));
+          area.append(line);
+        }
+      }
+    }catch(e){area.replaceChildren(el('p','Modul belum tersedia.','error'));}
+    finally{btn.disabled=false;}
+  };
+  return {btn,area};
+}
+
+function buildPilotModules(unit){
+  const wrap=el('section',null,'dashboard-module');
+  wrap.append(el('h2','Modul pilot'));
+  const allowed={
+    teacher:['schedule','announcement','leave','homework','quiz','p5'],
+    principal:['schedule','announcement','leave','homework','quiz','p5'],
+    school_admin:['schedule','announcement','leave','homework','quiz','p5'],
+    guardian:['schedule','announcement','homework','quiz','p5'],
+  };
+  const kinds=allowed[unit.role]||[];
+  if(!kinds.length)return null;
+  const grid=el('div',null,'kpi-grid');
+  for(const kind of kinds){
+    const mod=buildPilotModule(unit,kind);
+    const card=el('div',null,'kpi-card');
+    card.append(mod.btn,mod.area);
+    grid.append(card);
+  }
+  wrap.append(grid);
+  return wrap;
 }

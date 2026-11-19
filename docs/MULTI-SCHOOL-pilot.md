@@ -59,3 +59,28 @@ Seed menghubungi Supabase langsung via connection pooler — bukan lewat SQL Edi
   `pilot_can` menolak `school_id NULL` — konsisten, bukan bug.
 - Membership foundation_admin memakai `school_id NULL` (sesuai CHECK constraint).
 - Semua UUID deterministik (`aa11bb22-…`) — aman untuk idempotent re-seed.
+
+## Fase 2 — konten akademik (2026-11-19)
+
+`node scripts/seed_multi_school_academic.mjs` menambah:
+- 10 guru mapel baru (n=11..20): PPKn, BIN, IPA, IPS, B.Inggris, PJOK,
+  SBdP untuk NSD1; PPKn/B, BIN/B, IPA/B untuk NSD2 — mapel lengkap
+  kurikulum SD (8 mapel per sekolah).
+- 4 ortuwali baru (n=21..24), masing-masing 2 siswa per kelas.
+- 72 assessments (3 judul × 8 mapel × 3 kelas), 4.410 student_grades
+  published + publication snapshots + assessment releases.
+- 24 sesi kehadiran published (8 per kelas), 11 siswa flagged absent.
+- EWS rules aktif v2 + scan: 6 alerts NSD1, 5 alerts NSD2.
+- 3 school_report_reviews released + 105 report snapshots.
+
+Verifikasi: `node scripts/verify_multi_school_academic.mjs` → 14/14 PASS.
+
+Catatan migrasi data:
+- `kabarkelas_grade_workflow` per guru menampilkan SEMUA mapel kelas
+  binaannya (bukan hanya mapelnya) — otorisasi grade class-scoped,
+  bukan subject-scoped. Guru mapel bisa input nilai mapel lain selama
+  dia assigned ke kelas itu. Jika ingin subject-scoped, perlu kolom
+  mapping guru↔mapel atau cek `lesson_schedules.teacher_user_id`.
+- Tidak ada RPC untuk membuat assessment/student_grades — seed nilai
+  dilakukan langsung via SQL (postgres). Workflow guru hanya bisa
+  record_attempt/correct/finalize pada grade yang sudah ada.

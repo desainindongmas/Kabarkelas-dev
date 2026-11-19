@@ -81,3 +81,19 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
   (bukan SQL Editor). scripts/verify_multi_school_isolation.mjs:
   15/15 RPC-level isolation checks PASS — tidak ada kebocoran
   lintas sekolah; foundation_admin by design tanpa modul pilot.
+
+## Phase 6 (2026-11-19): konten akademik + verifikasi UI demo-parity
+- scripts/seed_multi_school_academic.mjs: +10 guru mapel (kurikulum SD
+  lengkap: PPKn, BIN, MTK, IPA, IPS, B.Inggris, PJOK, SBdP), +4 ortuwali
+  baru (2 siswa per ortu), 8 mapel/sekolah, 72 assessments, 4.410 nilai
+  published + snapshot + release, 24 sesi kehadiran, EWS rules v2 aktif,
+  3 rapor released + 105 snapshot. EWS scan via RPC: 6+5 alerts.
+- scripts/verify_multi_school_academic.mjs: 14/14 checks PASS.
+- UI live diverifikasi vs branch fix/ui-demo-parity-v2 (demo repo
+  C:/Users/Nur Azizah/kabarkelas/Kabarkelas-dev): rendering nilai, EWS,
+  rapor, siswa identik — parity terjaga.
+- Catatan: tidak ada RPC pembuatan assessment/student_grades — input
+  nilai guru hanya untuk grade existing (record_attempt/correct/
+  finalize). Pembuatan soal/assessment masih via SQL.
+- Sekolah B punya mapel ganda MTK/BIN (legacy) + MTKB/BINB — nilai
+  tetap valid, bukan kebocoran.

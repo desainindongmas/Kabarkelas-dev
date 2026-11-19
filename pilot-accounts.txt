@@ -1,0 +1,55 @@
+DAFTAR AKUN PILOT — KabarKelas Dev
+Live: https://kabarkelas-dev.pages.dev
+Semua data sintetis. Jangan gunakan untuk data siswa asli.
+
+============================================================
+A. AKUN FIXTURE MULTI-SCHOOL (Yayasan Nusantara Cemerlang)
+   Password SEMUA akun di bagian ini: PilotYayasan2026!
+============================================================
+
+Email                                      Role            Sekolah / Cakupan
+pilot.foundasi@kabarkelas.dev              foundation_admin  Yayasan (semua unit)
+pilot.kepala1@kabarkelas.dev               principal        SD Nusantara 1 (NSD1)
+pilot.kepala2@kabarkelas.dev               principal        SD Nusantara 2 (NSD2)
+pilot.admin1@kabarkelas.dev                school_admin     SD Nusantara 1 (NSD1)
+pilot.guru-a1@kabarkelas.dev               teacher          NSD1 — wali Kelas 4A + MTK 4A
+pilot.guru-a2@kabarkelas.dev               teacher          NSD1 — wali Kelas 4B + MTK 4B
+pilot.guru-b1@kabarkelas.dev               teacher          NSD2 — wali Kelas 5A + MTKB 5A
+pilot.guru-ab@kabarkelas.dev               teacher          LINTAS: NSD1 (IPA 4A) + NSD2 (MTKB 5A)
+pilot.guru-ppkn@kabarkelas.dev             teacher          NSD1 — PPKn 4A & 4B
+pilot.guru-bin@kabarkelas.dev              teacher          NSD1 — BIN 4A & 4B
+pilot.guru-ipa@kabarkelas.dev              teacher          NSD1 — IPA 4A & 4B
+pilot.guru-ips@kabarkelas.dev              teacher          NSD1 & NSD2 — IPS
+pilot.guru-bing@kabarkelas.dev             teacher          NSD1 & NSD2 — B.Inggris
+pilot.guru-pjok@kabarkelas.dev             teacher          NSD1 & NSD2 — PJOK
+pilot.guru-sbdp@kabarkelas.dev             teacher          NSD1 & NSD2 — SBdP
+pilot.guru-b-ppkn@kabarkelas.dev           teacher          NSD2 — PPKn 5A
+pilot.guru-b-bin@kabarkelas.dev            teacher          NSD2 — BINB 5A
+pilot.guru-b-ipa@kabarkelas.dev            teacher          NSD2 — IPA 5A
+pilot.ortu-a@kabarkelas.dev                guardian         NSD1 (2 anak: NSA-001 Kelas 4A, NSB-001 Kelas 4B)
+pilot.ortu-b@kabarkelas.dev                guardian         NSD2 (anak NTB-001 Kelas 5A)
+pilot.ortu-a1@kabarkelas.dev               guardian         NSD1 — 2 anak Kelas 4A (NSA-001, NSA-002)
+pilot.ortu-a2@kabarkelas.dev               guardian         NSD1 — anak Kelas 4B
+pilot.ortu-b1a@kabarkelas.dev              guardian         NSD2 — anak Kelas 5A
+pilot.ortu-b1b@kabarkelas.dev              guardian         NSD2 — anak Kelas 5A
+
+Total: 24 akun.
+
+============================================================
+B. AKUN PILOT SEKOLAH DEMO (lama, single-school)
+   Password SEMUA akun di bagian ini: PilotKabarKelas2026!
+============================================================
+
+Email                        Role
+pilot.guru@kabarkelas.dev    teacher
+pilot.kepala@kabarkelas.dev  principal (kepala sekolah)
+pilot.admin@kabarkelas.dev   school_admin
+pilot.ortu@kabarkelas.dev    guardian
+
+============================================================
+CATATAN FITUR BARU (commit 8bfac63, 2026-11-19)
+============================================================
+- Guru (teacher): modul "Buat penilaian" — hanya mapel yang ditugaskan.
+- Admin (foundation_admin/principal/school_admin): modul "Impor data massal" (CSV).
+- Authz nilai kini per-mapel: guru hanya melihat/kelola nilai mapelnya.
+- Template CSV: docs/IMPORT-template.md di repo.

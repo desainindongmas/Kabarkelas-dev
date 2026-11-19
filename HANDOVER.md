@@ -33,4 +33,10 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
 ## Known holds
 - Supabase FREE tier: no leaked-password protection, no scheduled backup
 - npm run test:db requires local PostgreSQL (not available on this machine)
-- Browser E2E against live site pending manual verification after Pages deploy
+- G10 E2E verified live 2026-11-19 as pilot.guru (teacher): all 6 modules render,
+  schedule/announcement show seed data, leave request submit→list works.
+  Homework/quiz/P5 verified to empty-state only (no seed rows yet).
+  Principal/school_admin/guardian roles untested — no pilot passwords exist
+  for owner accounts (msubhi.*@gmail.com).
+- Fixed post-G10: buildPilotModules was dead code (never invoked) so rollup
+  tree-shook all G10 UI out of the bundle; wired into showHome @ 38ec923.

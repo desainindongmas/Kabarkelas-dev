@@ -48,3 +48,14 @@ KabarKelas-dev handover — updated 2026-11-19 (final)
 - E2E live verified per role: teacher (semua modul+data), principal
   (leave_decide pending→approved OK), school_admin (jadwal OK),
   guardian (hanya 5 modul, P5 hanya data anak ter-link SIM-001).
+
+## Phase 3 (2026-11-19): hardening tanpa Supabase Pro
+- RLS audit 8 tabel G10: semua ENABLE+FORCE RLS, masing-masing 1 SELECT
+  policy; write hanya via SECURITY DEFINER RPC.
+- Anon denial verified live: semua RPC G10 → 42501, direct table read → 42501.
+- Regression test tests/pilot-bundle.test.js: build vite lalu assert string
+  RPC G10 ada di bundle (menangkap bug dead-code tree-shake). ~13s.
+- Backup manual: docs/BACKUP.md — pg_dump via pooler session :5432,
+  jadwal mingguan + pra-migration, restore test ke project terpisah.
+- OPEN: rotasi GitHub PAT yang tertanam di remote URL .git/config;
+  leaked-password protection tetap butuh Pro (diterima untuk pilot).

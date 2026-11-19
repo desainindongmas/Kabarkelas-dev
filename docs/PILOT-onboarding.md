@@ -1,5 +1,7 @@
 # KabarKelas — Panduan Pilot (1 halaman)
 
+
+Versi per peran: [Orang tua](PILOT-onboarding-ortu.md) · [Kepala sekolah](PILOT-onboarding-kepala.md)
 Terima kasih sudah mau mencoba KabarKelas. Panduan ini untuk guru, kepala
 sekolah, dan orang tua yang ikut pilot.
 
